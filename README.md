@@ -32,11 +32,32 @@ Both the guess lists (`src/data/wordlists/guesses-*.json`) and answer pools
 
 ## Leaderboard
 
-The leaderboard is **local-first**: your own scores are real and saved in the
-browser, and the surrounding field is a deterministic simulated community so the
-board is lively on a static host. To connect real cross-player rankings, swap
-the `getDaily` / `getAllTime` implementations in `src/lib/leaderboard.ts` for a
-shared backend — the UI depends only on those two functions.
+The leaderboard ranks the classic daily 5-letter game for the individual day and
+the all-time season. It has two modes, chosen automatically by whether Supabase
+credentials are present:
+
+- **Shared backend (Supabase)** — real cross-player rankings from a shared
+  `scores` table. Players are anonymous: each device gets a random id and picks a
+  display name (no login).
+- **Local fallback** — when no credentials are set (local dev, previews), the
+  board shows your real local scores against a deterministic simulated field so
+  the UI still renders.
+
+Your own results are always saved locally too, for instant stats and offline play.
+
+### Set up the shared backend
+
+1. Create a project at [supabase.com](https://supabase.com) (the free tier is fine).
+2. In the dashboard: **SQL Editor → New query**, paste [`supabase/schema.sql`](supabase/schema.sql), and **Run**.
+   This creates the `scores` table, Row Level Security policies (public read,
+   append-only insert with integrity checks), and the `alltime_leaderboard` view.
+3. Copy `.env.example` to `.env.local` and fill in your **Project URL** and
+   **anon / public key** (Project Settings → API).
+4. `npm run dev` (or rebuild for prod). The app now reads/writes the shared board.
+
+The anon key is meant to be public in the client — RLS is what constrains it:
+reads are open, inserts are append-only, points must match the scoring formula,
+and one row per device per day is enforced by a unique constraint.
 
 ## Develop
 

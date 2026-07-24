@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Delete, Share2, Check, Trophy } from 'lucide-react'
 import { WordleConfig } from '../lib/wordleConfig'
 import { answerForDay, scoreGuess, getDayIndex, MAX_ROWS, LetterState } from '../lib/wordle'
-import { recordDaily } from '../lib/leaderboard'
+import { recordDaily, submitDaily } from '../lib/leaderboard'
 import { navigate } from '../lib/router'
 
 interface SavedGame {
@@ -66,6 +66,8 @@ export default function Wordle({ config, ranked = false }: Props) {
   useEffect(() => {
     if (ranked && status !== 'playing') {
       recordDaily(day, status === 'won', guesses.length)
+      // Publish to the shared leaderboard (no-op when no backend is configured).
+      submitDaily(day)
     }
   }, [ranked, status, day, guesses.length])
 

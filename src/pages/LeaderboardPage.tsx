@@ -1,9 +1,14 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Trophy, Pencil, Check, Flame } from 'lucide-react'
 import {
-  getDaily, getAllTime, getPlayerName, setPlayerName, getPlayerStats, LeaderRow,
+  getDailyBoard, getAllTimeBoard, submitDaily,
+  getPlayerName, setPlayerName, getPlayerStats, LeaderRow,
 } from '../lib/leaderboard'
+import { hasBackend } from '../lib/supabase'
 import { getDayIndex } from '../lib/wordle'
+
+type Board = { rows: LeaderRow[]; playerRank: number | null }
+const EMPTY_BOARD: Board = { rows: [], playerRank: null }
 
 type Tab = 'today' | 'alltime'
 
@@ -54,13 +59,26 @@ export default function LeaderboardPage() {
   const [tick, setTick] = useState(0) // bump to recompute after name save
 
   const day = getDayIndex()
-  const daily = useMemo(() => getDaily(day), [day, tick])
-  const allTime = useMemo(() => getAllTime(), [tick])
+  const [daily, setDaily] = useState<Board>(EMPTY_BOARD)
+  const [allTime, setAllTime] = useState<Board>(EMPTY_BOARD)
+  const [loading, setLoading] = useState(true)
   const stats = useMemo(() => getPlayerStats(), [tick])
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    Promise.all([getDailyBoard(day), getAllTimeBoard()]).then(([d, a]) => {
+      if (!alive) return
+      setDaily(d); setAllTime(a); setLoading(false)
+    })
+    return () => { alive = false }
+  }, [day, tick])
 
   const saveName = () => {
     setPlayerName(name)
     setEditing(false)
+    // Re-publish under the new name, then refresh the boards.
+    submitDaily(day).finally(() => setTick(t => t + 1))
     setTick(t => t + 1)
   }
 
@@ -121,11 +139,20 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      <RankList rows={board.rows} playerRank={board.playerRank} />
+      {loading ? (
+        <div className="text-center text-umber-400 text-sm py-10">Loading leaderboard…</div>
+      ) : board.rows.length === 0 ? (
+        <div className="text-center text-umber-400 text-sm bg-white rounded-2xl py-8 px-4 shadow-soft">
+          No scores yet — be the first on the board!
+        </div>
+      ) : (
+        <RankList rows={board.rows} playerRank={board.playerRank} />
+      )}
 
       <p className="text-umber-300 text-[11px] text-center mt-6 leading-relaxed">
-        Your scores are real and saved on this device. The surrounding field is a simulated community
-        so the board is lively before a shared server is connected.
+        {hasBackend
+          ? 'Scores are shared live across all players. You appear once you finish today’s Neno la Leo.'
+          : 'Your scores are real and saved on this device. The surrounding field is a simulated community shown until a shared server is connected.'}
       </p>
     </div>
   )

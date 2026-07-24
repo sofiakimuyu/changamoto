@@ -1,16 +1,18 @@
 // Leaderboard for the classic daily Wordle (Neno la Leo). It ranks the player
 // for the individual day and for the running all-time season.
 //
-// ── A note on the "community" ─────────────────────────────────────────────
-// A leaderboard that compares you to *other real players* needs a shared server.
-// A static site can't provide one on its own, so this module is deliberately
-// LOCAL-FIRST: the player's own scores are the real data, and the surrounding
-// field is a deterministic simulated community (stable per day, seeded so it
-// never shuffles under you). Everything the UI needs flows through `getDaily`
-// and `getAllTime`, so swapping in a real backend later means re-implementing
-// just those two functions — the components don't change.
+// ── Backend vs. fallback ───────────────────────────────────────────────────
+// When Supabase is configured (VITE_SUPABASE_URL/ANON_KEY set) the board shows
+// REAL players from the shared `scores` table. When it isn't — local dev or a
+// preview without keys — the async board functions fall back to a deterministic
+// SIMULATED community so the UI still has something to render. The player's own
+// results are always saved locally too, for instant stats and offline play.
+//
+// The UI consumes only `getDailyBoard` / `getAllTimeBoard` (async) and
+// `submitDaily`, so the storage backing them can change without touching pages.
 
 import { MAX_ROWS, getDayIndex } from './wordle'
+import { supabase, hasBackend, getClientId } from './supabase'
 
 const NAME_KEY = 'changamoto_player_name'
 const RESULTS_KEY = 'changamoto_daily_results_v1'
@@ -152,8 +154,8 @@ function playerLabel(): string {
   return getPlayerName() || 'You'
 }
 
-/** Ranked board for a single day. Player is included only if they've finished. */
-export function getDaily(day: number): { rows: LeaderRow[]; playerRank: number | null } {
+/** Simulated ranked board for a single day (fallback when no backend). */
+function getSimulatedDaily(day: number): { rows: LeaderRow[]; playerRank: number | null } {
   const rows: LeaderRow[] = BOTS.map(b => {
     const d = botDay(b, day)
     return { name: b.name, points: d.points, detail: d.solved ? `${d.guesses}/${MAX_ROWS}` : 'X/6', isPlayer: false }
@@ -174,8 +176,8 @@ export function getDaily(day: number): { rows: LeaderRow[]; playerRank: number |
   return { rows, playerRank }
 }
 
-/** Ranked all-time board over the season (LAUNCH_DAY..today). */
-export function getAllTime(): { rows: LeaderRow[]; playerRank: number | null } {
+/** Simulated ranked all-time board over the season (fallback when no backend). */
+function getSimulatedAllTime(): { rows: LeaderRow[]; playerRank: number | null } {
   const today = getDayIndex()
   const start = Math.min(LAUNCH_DAY, today)
   const seasonDays: number[] = []
@@ -203,4 +205,74 @@ export function getAllTime(): { rows: LeaderRow[]; playerRank: number | null } {
   rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
   const playerRank = rows.findIndex(r => r.isPlayer) + 1
   return { rows, playerRank }
+}
+
+// ── Shared backend (Supabase) ────────────────────────────────────────────────
+interface ScoreRow { client_id: string; name: string; points: number; solved: boolean; guesses: number }
+
+/** Submit the player's finished daily result to the shared board (idempotent). */
+export async function submitDaily(day: number): Promise<void> {
+  if (!hasBackend || !supabase) return
+  const pr = getPlayerResult(day)
+  if (!pr) return
+  const name = getPlayerName() || 'Anonymous'
+  // First result per device/day wins — ignore the conflict on re-submit.
+  const { error } = await supabase
+    .from('scores')
+    .upsert(
+      { client_id: getClientId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points },
+      { onConflict: 'client_id,day', ignoreDuplicates: true },
+    )
+  if (error) console.warn('submitDaily failed:', error.message)
+}
+
+function rankRows(rows: LeaderRow[]): { rows: LeaderRow[]; playerRank: number | null } {
+  rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
+  const idx = rows.findIndex(r => r.isPlayer)
+  return { rows, playerRank: idx >= 0 ? idx + 1 : null }
+}
+
+/** Real (or simulated) ranked board for a single day. */
+export async function getDailyBoard(day: number): Promise<{ rows: LeaderRow[]; playerRank: number | null }> {
+  if (!hasBackend || !supabase) return getSimulatedDaily(day)
+
+  const me = getClientId()
+  const { data, error } = await supabase
+    .from('scores')
+    .select('client_id,name,points,solved,guesses')
+    .eq('day', day)
+    .order('points', { ascending: false })
+  if (error) { console.warn('getDailyBoard failed:', error.message); return getSimulatedDaily(day) }
+
+  const rows: LeaderRow[] = (data as ScoreRow[]).map(r => ({
+    name: r.client_id === me ? (getPlayerName() || r.name) : r.name,
+    points: r.points,
+    detail: r.solved ? `${r.guesses}/${MAX_ROWS}` : 'X/6',
+    isPlayer: r.client_id === me,
+  }))
+  return rankRows(rows)
+}
+
+/** Real (or simulated) ranked all-time board. */
+export async function getAllTimeBoard(): Promise<{ rows: LeaderRow[]; playerRank: number | null }> {
+  if (!hasBackend || !supabase) return getSimulatedAllTime()
+
+  const me = getClientId()
+  const { data, error } = await supabase
+    .from('alltime_leaderboard')
+    .select('client_id,name,points,played,wins')
+    .order('points', { ascending: false })
+  if (error) { console.warn('getAllTimeBoard failed:', error.message); return getSimulatedAllTime() }
+
+  const rows: LeaderRow[] = (data as { client_id: string; name: string; points: number; played: number; wins: number }[])
+    .map(r => {
+      const winRate = r.played ? Math.round((r.wins / r.played) * 100) : 0
+      return {
+        name: r.client_id === me ? (getPlayerName() || r.name) : r.name,
+        points: r.points,
+        detail: `${r.played} played · ${winRate}% win`,
+        isPlayer: r.client_id === me,
+      }
+    })
+  return rankRows(rows)
 }
