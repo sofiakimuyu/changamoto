@@ -9,12 +9,15 @@ const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
 export default function WordSearch() {
   const dayIdx = getDayIndex()
 
+  const WS_TARGET = 15
+  // Draw a larger candidate pool than the target so placement reliably fills 15.
   const wsWords = useMemo(() => {
-    const shorts = ALL_WORDS.filter(w => w.swahili.length >= 4 && w.swahili.length <= 7 && /^[A-Za-z]+$/.test(w.swahili))
-    return seededShuffle(shorts, dayIdx + 42).slice(0, 7).map(w => w.swahili.toUpperCase())
+    const fit = ALL_WORDS.filter(w => w.swahili.length >= 3 && w.swahili.length <= 8 && /^[A-Za-z]+$/.test(w.swahili))
+    return seededShuffle(fit, dayIdx + 42).slice(0, 26).map(w => w.swahili.toUpperCase())
   }, [dayIdx])
 
-  const { grid: wsGrid, placements: wsPlaced } = useMemo(() => generateWordSearch(wsWords, dayIdx + 7), [wsWords, dayIdx])
+  const { grid: wsGrid, placements: wsPlaced } = useMemo(
+    () => generateWordSearch(wsWords, dayIdx + 7, WS_TARGET), [wsWords, dayIdx])
   const wsWordList = useMemo(() => wsPlaced.map(p => p.word), [wsPlaced])
 
   const [wsFirst, setWsFirst] = useState<[number, number] | null>(null)
@@ -72,7 +75,7 @@ export default function WordSearch() {
                   const first = isCellFirst(r, c)
                   return (
                     <button key={c} onClick={() => wsTapCell(r, c)}
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-black transition-all ${
+                      className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center text-[11px] sm:text-xs font-black transition-all ${
                         found ? 'bg-savanna-400 text-white shadow-soft' :
                         wrong ? 'bg-maasai-400 text-white' :
                         first ? 'bg-ochre-400 text-white ring-2 ring-ochre-600' :

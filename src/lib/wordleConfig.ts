@@ -3,7 +3,7 @@
 // answer pool) and daily-answer selector, so the same game engine drives the
 // classic 5-letter home game and the 3/4/6-letter variants on the More Games page.
 import { WordleEntry } from '../data/wordle-words'
-import { createGuessValidator, normalizeGuess } from '../data/wordleValidation'
+import { createGuessValidator, normalizeGuess, isPlausibleSwahili } from '../data/wordleValidation'
 
 import guesses3 from '../data/wordlists/guesses-3.json'
 import guesses4 from '../data/wordlists/guesses-4.json'
@@ -51,7 +51,12 @@ function buildConfig(length: WordLength): WordleConfig {
     length,
     ...LABELS[length],
     loaded: validator.loaded,
-    isValidGuess: (raw: string) => validator.isValid(raw),
+    // Accept any word in the bundled dictionary OR any phonotactically valid
+    // Swahili word of the right length, so real words outside the static list
+    // are never wrongly rejected.
+    isValidGuess: (raw: string) =>
+      validator.isValid(raw) ||
+      (normalizeGuess(raw).length === length && isPlausibleSwahili(raw)),
     answers,
   }
 }

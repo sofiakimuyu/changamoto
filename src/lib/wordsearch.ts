@@ -1,5 +1,6 @@
 // Word-search grid generation and selection helpers (ported from Hekima).
-export const WS_SIZE = 9
+// A 13×13 grid comfortably fits 15 words of 3–8 letters.
+export const WS_SIZE = 13
 const WS_LETTERS = 'ABCDEFGHIKLMNOPRSTUVWZ'
 // 4 directions: right, down, diagonal-right, diagonal-left.
 const WS_DIRS: [number, number][] = [[0, 1], [1, 0], [1, 1], [1, -1]]
@@ -24,15 +25,18 @@ export interface WordSearch {
   placements: { word: string; cells: [number, number][] }[]
 }
 
-export function generateWordSearch(words: string[], seed: number): WordSearch {
+// `words` is a candidate pool; placement stops once `maxWords` are placed, so
+// pass more candidates than needed to reliably reach the target count.
+export function generateWordSearch(words: string[], seed: number, maxWords = words.length): WordSearch {
   const rand = seededRandFactory(seed)
   const grid: string[][] = Array.from({ length: WS_SIZE }, () => Array(WS_SIZE).fill(''))
   const placements: { word: string; cells: [number, number][] }[] = []
 
   for (const raw of words) {
+    if (placements.length >= maxWords) break
     const word = raw.toUpperCase()
     let done = false
-    for (let attempt = 0; attempt < 120 && !done; attempt++) {
+    for (let attempt = 0; attempt < 200 && !done; attempt++) {
       const [dr, dc] = WS_DIRS[Math.floor(rand() * WS_DIRS.length)]
       const row = Math.floor(rand() * WS_SIZE)
       const col = Math.floor(rand() * WS_SIZE)

@@ -10,6 +10,28 @@ export function normalizeGuess(raw: string): string {
   return raw.normalize('NFC').trim().toLowerCase()
 }
 
+/**
+ * Lenient Swahili phonotactic check. Swahili orthography is highly regular, so a
+ * few structural rules accept essentially every real Swahili word — including
+ * inflected/derived forms a static dictionary can't fully enumerate — while
+ * rejecting strings that can't be Swahili. Used as an OR alongside the bundled
+ * dictionary so guessing accepts any real Swahili word, not only listed ones.
+ * Because it only ever ADDS acceptance on top of the dictionary, being lenient
+ * here can never reject a word the dictionary already knows.
+ */
+export function isPlausibleSwahili(raw: string): boolean {
+  const w = normalizeGuess(raw)
+  if (!/^[a-z]+$/.test(w)) return false
+  if (w.length < 2) return false
+  if (/[qx]/.test(w)) return false          // q and x aren't used in Swahili
+  if (/c(?!h)/.test(w)) return false         // c only occurs in the digraph 'ch'
+  if (!/[aeiou]/.test(w)) return false       // a word must contain a vowel
+  if (/(.)\1\1/.test(w)) return false        // no letter repeated 3× in a row
+  if (/[^aeiou]{4,}/.test(w)) return false    // no run of 4+ consonants
+  if (!/[aeioumn]$/.test(w)) return false     // ends in a vowel or a nasal (m/n)
+  return true
+}
+
 export interface GuessValidator {
   /** True only if the word list loaded and is large enough to trust. */
   readonly loaded: boolean
