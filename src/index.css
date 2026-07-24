@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-sand-100 text-umber-700 font-sans;
+    overscroll-behavior: none;
+  }
+  #root { @apply min-h-screen; }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-3xl shadow-card p-5;
+  }
+  .card-dark {
+    @apply bg-umber-700 rounded-3xl shadow-card p-5;
+  }
+  .btn-primary {
+    @apply bg-ochre-500 text-white font-semibold px-6 py-4 rounded-full
+           hover:bg-ochre-600 active:scale-95 transition-all duration-150
+           shadow-warm focus:outline-none focus:ring-2 focus:ring-ochre-300 focus:ring-offset-2;
+  }
+  .btn-secondary {
+    @apply bg-sand-200 text-umber-700 font-semibold px-6 py-4 rounded-full
+           hover:bg-sand-300 active:scale-95 transition-all duration-150;
+  }
+  .btn-ghost {
+    @apply text-ochre-500 font-semibold px-6 py-4 rounded-full
+           hover:bg-ochre-50 active:scale-95 transition-all duration-150;
+  }
+  .section-title {
+    @apply text-xl font-bold text-umber-700 tracking-tight;
+  }
+  .screen {
+    @apply pb-24 overflow-y-auto;
+    padding-top: max(3.5rem, env(safe-area-inset-top));
+    min-height: 100dvh;
+  }
+  .swahili-word {
+    @apply font-bold text-ochre-500 tracking-wide;
+  }
+}
+
+@layer utilities {
+  .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .text-balance { text-wrap: balance; }
+}
+
+/* ── Zanzibar arabesque lattice: interlocked arch pattern ─────────────── */
+/* Inspired by the carved wooden doors of Stone Town, Zanzibar.             */
+/* Each 48×48 tile has 8 quadratic bezier arcs forming interlaced petals,  */
+/* plus brass-stud circle accents at the four corners.                      */
+.lattice-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23BF6E19' stroke-width='1.2'%3E%3Cpath d='M24,0 Q48,0 48,24'/%3E%3Cpath d='M48,24 Q48,48 24,48'/%3E%3Cpath d='M24,48 Q0,48 0,24'/%3E%3Cpath d='M0,24 Q0,0 24,0'/%3E%3Cpath d='M24,0 Q24,24 48,24'/%3E%3Cpath d='M48,24 Q24,24 24,48'/%3E%3Cpath d='M24,48 Q24,24 0,24'/%3E%3Cpath d='M0,24 Q24,24 24,0'/%3E%3Ccircle cx='0' cy='0' r='2' fill='%23BF6E19'/%3E%3Ccircle cx='48' cy='0' r='2' fill='%23BF6E19'/%3E%3Ccircle cx='0' cy='48' r='2' fill='%23BF6E19'/%3E%3Ccircle cx='48' cy='48' r='2' fill='%23BF6E19'/%3E%3Ccircle cx='24' cy='24' r='2.5'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ── Maasai beadwork stripe ──────────────────────────────────────────── */
+/* Inspired by the dense geometric bead rows of Maasai jewelry.            */
+/* Sequence: maasai red | white | cobalt | white | ochre | white | saffron */
+.beadwork-stripe {
+  background: repeating-linear-gradient(
+    90deg,
+    #C8391A 0px,   #C8391A 10px,
+    #FFFFFF 10px,  #FFFFFF 13px,
+    #2952CC 13px,  #2952CC 23px,
+    #FFFFFF 23px,  #FFFFFF 26px,
+    #BF6E19 26px,  #BF6E19 36px,
+    #FFFFFF 36px,  #FFFFFF 39px,
+    #D4950A 39px,  #D4950A 49px,
+    #FFFFFF 49px,  #FFFFFF 52px,
+    #3A7A3A 52px,  #3A7A3A 62px,
+    #FFFFFF 62px,  #FFFFFF 65px,
+    #C8391A 65px,  #C8391A 75px,
+    #FFFFFF 75px,  #FFFFFF 78px
+  );
+  background-size: 78px 100%;
+  height: 6px;
+}
+
+/* ── Shuka plaid: the Maasai plaid/tartan pattern ────────────────────── */
+/* Orange-red base with dark crossing lines, inspired by the orange shuka  */
+.shuka-pattern {
+  background-color: #D44020;
+  background-image:
+    repeating-linear-gradient(0deg,   transparent, transparent 11px, rgba(0,0,0,0.18) 11px, rgba(0,0,0,0.18) 14px),
+    repeating-linear-gradient(90deg,  transparent, transparent 11px, rgba(0,0,0,0.18) 11px, rgba(0,0,0,0.18) 14px),
+    repeating-linear-gradient(0deg,   transparent, transparent 4px,  rgba(90,10,0,0.22) 4px,  rgba(90,10,0,0.22) 6px),
+    repeating-linear-gradient(90deg,  transparent, transparent 4px,  rgba(90,10,0,0.22) 4px,  rgba(90,10,0,0.22) 6px);
+}
+
+/* ── Kanga-border stripe pattern ─────────────────────────────────────── */
+.kanga-stripe {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 6px,
+    rgba(191,110,25,0.12) 6px,
+    rgba(191,110,25,0.12) 8px
+  );
+}
+
+/* ── Audio visualizer bars ───────────────────────────────────────────── */
+@keyframes bar1 { 0%,100% { height: 4px;  } 50% { height: 18px; } }
+@keyframes bar2 { 0%,100% { height: 9px;  } 50% { height: 26px; } }
+@keyframes bar3 { 0%,100% { height: 14px; } 50% { height: 7px;  } }
+@keyframes bar4 { 0%,100% { height: 6px;  } 50% { height: 22px; } }
+
+.audio-bar-1 { animation: bar1 0.8s ease-in-out infinite; }
+.audio-bar-2 { animation: bar2 0.6s ease-in-out infinite; }
+.audio-bar-3 { animation: bar3 0.9s ease-in-out infinite; }
+.audio-bar-4 { animation: bar4 0.7s ease-in-out infinite; }

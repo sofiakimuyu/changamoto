@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# Environment / secrets
+.env
+.env.local
+*.local
