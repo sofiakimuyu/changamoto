@@ -4,6 +4,7 @@ import { WordleConfig } from '../lib/wordleConfig'
 import { answerForDay, scoreGuess, getDayIndex, MAX_ROWS, LetterState } from '../lib/wordle'
 import { recordDaily, submitDaily } from '../lib/leaderboard'
 import { navigate } from '../lib/router'
+import { playType, playFlip } from '../lib/sound'
 
 interface SavedGame {
   day: number
@@ -93,6 +94,8 @@ export default function Wordle({ config, ranked = false }: Props) {
     setGuesses(newGuesses)
     setRevealRow(newGuesses.length - 1)
     setStatus(newStatus)
+    // Paper rustle for each tile, timed to its flip (matches the c*0.12s stagger).
+    for (let c = 0; c < WORD_LEN; c++) setTimeout(playFlip, c * 120)
     saveGame(WORD_LEN, { day, guesses: newGuesses, status: newStatus })
 
     if (newStatus !== 'playing') setTimeout(() => setShowResult(true), 1600)
@@ -103,6 +106,7 @@ export default function Wordle({ config, ranked = false }: Props) {
     if (currentRef.current.length >= WORD_LEN) return
     currentRef.current += l
     setCurrent(currentRef.current)
+    playType()
   }, [status, WORD_LEN])
 
   const removeLetter = useCallback(() => {
