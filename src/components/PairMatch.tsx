@@ -36,18 +36,18 @@ export default function PairMatch() {
   return (
     <div className="px-4 pb-10 max-w-lg mx-auto">
       <h2 className="text-2xl font-black text-umber-700 mb-1">Oanisha Maneno</h2>
-      <p className="text-umber-400 text-sm mb-6">Connect each Swahili word to its English meaning</p>
+      <p className="text-umber-400 text-sm mb-6">Unganisha kila neno la Kiswahili na maana yake ya Kiingereza</p>
 
       {puzzleDone ? (
         <div className="text-center py-10">
           <div className="text-6xl mb-4">✦</div>
           <h3 className="text-2xl font-black text-umber-700 mb-2">Umefanikiwa!</h3>
-          <p className="text-umber-400 mb-6">You matched all {puzzlePairs.length} pairs!</p>
+          <p className="text-umber-400 mb-6">Umeoanisha jozi zote {puzzlePairs.length}!</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-3">
-            <p className="text-xs font-bold text-umber-400 uppercase tracking-widest text-center mb-1">Swahili</p>
+            <p className="text-xs font-bold text-umber-400 uppercase tracking-widest text-center mb-1">Kiswahili</p>
             {puzzlePairs.map(pair => {
               const isMatched = matched.includes(pair.swahili)
               const isWrong = wrongFlash === pair.swahili
@@ -65,7 +65,7 @@ export default function PairMatch() {
             })}
           </div>
           <div className="space-y-3">
-            <p className="text-xs font-bold text-umber-400 uppercase tracking-widest text-center mb-1">English</p>
+            <p className="text-xs font-bold text-umber-400 uppercase tracking-widest text-center mb-1">Kiingereza</p>
             {englishShuffled.map(en => {
               const isMatched = matchedEnglish.includes(en)
               return (

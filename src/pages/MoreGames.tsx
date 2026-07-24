@@ -12,22 +12,22 @@ interface GameCard {
 }
 
 const GAMES: GameCard[] = [
-  { route: '/wordle/3', emoji: '🔤', title: 'Neno la Herufi 3', subtitle: '3-letter Swahili Wordle', gradient: 'linear-gradient(135deg,#3A7A3A,#1C1209)', len: 3 },
-  { route: '/wordle/4', emoji: '🔡', title: 'Neno la Herufi 4', subtitle: '4-letter Swahili Wordle', gradient: 'linear-gradient(135deg,#BF6E19,#1C1209)', len: 4 },
-  { route: '/wordle/6', emoji: '🔠', title: 'Neno la Herufi 6', subtitle: '6-letter Swahili Wordle', gradient: 'linear-gradient(135deg,#2952CC,#091A57)', len: 6 },
-  { route: '/wordsearch', emoji: '🔍', title: 'Tafuta Maneno', subtitle: 'Daily word search', gradient: 'linear-gradient(135deg,#C8391A,#7D220F)' },
-  { route: '/pairmatch', emoji: '🧩', title: 'Oanisha Maneno', subtitle: 'Match Swahili to English', gradient: 'linear-gradient(135deg,#D4950A,#9B3D2A)' },
+  { route: '/wordle/3', emoji: '🔤', title: 'Neno la Herufi 3', subtitle: 'Wordle ya herufi 3', gradient: 'linear-gradient(135deg,#3A7A3A,#1C1209)', len: 3 },
+  { route: '/wordle/4', emoji: '🔡', title: 'Neno la Herufi 4', subtitle: 'Wordle ya herufi 4', gradient: 'linear-gradient(135deg,#BF6E19,#1C1209)', len: 4 },
+  { route: '/wordle/6', emoji: '🔠', title: 'Neno la Herufi 6', subtitle: 'Wordle ya herufi 6', gradient: 'linear-gradient(135deg,#2952CC,#091A57)', len: 6 },
+  { route: '/wordsearch', emoji: '🔍', title: 'Tafuta Maneno', subtitle: 'Tafuta-maneno ya kila siku', gradient: 'linear-gradient(135deg,#C8391A,#7D220F)' },
+  { route: '/pairmatch', emoji: '🧩', title: 'Oanisha Maneno', subtitle: 'Oanisha Kiswahili na Kiingereza', gradient: 'linear-gradient(135deg,#D4950A,#9B3D2A)' },
 ]
 
 const STATUS_LABEL: Record<string, string> = {
-  won: '✓ Solved today', lost: 'Come back tomorrow', playing: 'In progress…', none: '',
+  won: '✓ Umetatua leo', lost: 'Rudi kesho', playing: 'Inaendelea…', none: '',
 }
 
 export default function MoreGames() {
   return (
     <div className="max-w-3xl mx-auto px-4 pt-6 pb-16">
       <h1 className="text-3xl font-black text-umber-700 mb-1">Michezo Zaidi</h1>
-      <p className="text-umber-400 text-sm mb-6">More games · pick your challenge</p>
+      <p className="text-umber-400 text-sm mb-6">Michezo zaidi · chagua changamoto yako</p>
 
       <div className="space-y-3">
         {GAMES.map(g => {

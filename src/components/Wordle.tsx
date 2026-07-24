@@ -83,9 +83,9 @@ export default function Wordle({ config, ranked = false }: Props) {
   const submit = useCallback(() => {
     if (status !== 'playing') return
     const cur = currentRef.current
-    if (cur.length < WORD_LEN) { toast('Not enough letters'); setShaking(true); return }
-    if (!config.loaded) { toast('Word list failed to load'); setShaking(true); return }
-    if (!config.isValidGuess(cur)) { toast('Not in word list'); setShaking(true); return }
+    if (cur.length < WORD_LEN) { toast('Herufi hazitoshi'); setShaking(true); return }
+    if (!config.loaded) { toast('Orodha ya maneno haikupakia'); setShaking(true); return }
+    if (!config.isValidGuess(cur)) { toast('Halimo kwenye orodha'); setShaking(true); return }
 
     const newGuesses = [...guesses, cur]
     const won  = cur === answer.word
@@ -188,9 +188,9 @@ export default function Wordle({ config, ranked = false }: Props) {
     }
     try {
       await navigator.clipboard.writeText(`${text}\n${url}`)
-      toast('Copied to clipboard')
+      toast('Imenakiliwa')
     } catch {
-      toast('Sharing not supported')
+      toast('Kushiriki hakutumiki')
     }
   }
 
@@ -199,7 +199,7 @@ export default function Wordle({ config, ranked = false }: Props) {
       {/* Word-list load failure — validation fails closed, so surface it. */}
       {!config.loaded && (
         <div className="mx-auto mb-2 max-w-md rounded-xl bg-red-100 border border-red-300 text-red-700 text-sm font-semibold px-4 py-2 text-center">
-          Word list failed to load. Guessing is disabled — please reload the app.
+          Orodha ya maneno haikupakia. Kubahatisha kumezimwa — tafadhali pakia upya programu.
         </div>
       )}
 
@@ -282,7 +282,7 @@ export default function Wordle({ config, ranked = false }: Props) {
                 {status === 'won' ? 'Umeshinda!' : 'Karibu tena kesho'}
               </h3>
               <p className="text-umber-400 text-sm">
-                {status === 'won' ? `Solved in ${guesses.length}/${MAX_ROWS}!` : 'You’ll get the next one!'}
+                {status === 'won' ? `Umetatua kwa ${guesses.length}/${MAX_ROWS}!` : 'Utalipata lijalo!'}
               </p>
             </div>
 
@@ -293,7 +293,7 @@ export default function Wordle({ config, ranked = false }: Props) {
                 : 'linear-gradient(135deg,#3A7A3A,#1C1209)' }}>
               <div className="absolute inset-0 lattice-pattern opacity-20"/>
               <div className="relative">
-                <p className="text-white/60 text-[11px] font-semibold uppercase tracking-widest mb-1">The word was</p>
+                <p className="text-white/60 text-[11px] font-semibold uppercase tracking-widest mb-1">Neno lilikuwa</p>
                 <h4 className="text-5xl font-black text-white uppercase tracking-wide">{answer.word}</h4>
               </div>
             </div>
@@ -302,15 +302,15 @@ export default function Wordle({ config, ranked = false }: Props) {
             <div className="space-y-2.5">
               <button onClick={shareResult}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold btn-primary">
-                <Share2 className="w-5 h-5"/> Share
+                <Share2 className="w-5 h-5"/> Shiriki
               </button>
               <button onClick={() => setShowSignup(true)}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
-                <Trophy className="w-5 h-5"/> Sign up to track progress
+                <Trophy className="w-5 h-5"/> Jisajili kufuatilia maendeleo
               </button>
               <button onClick={() => navigate('/games')}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-semibold bg-white border-2 border-sand-200 text-umber-600 active:scale-95 transition-transform">
-                <Grid3x3 className="w-5 h-5"/> Play more games
+                <Grid3x3 className="w-5 h-5"/> Cheza michezo zaidi
               </button>
             </div>
           </div>

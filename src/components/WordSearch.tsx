@@ -53,16 +53,16 @@ export default function WordSearch() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-2xl font-black text-umber-700">Tafuta Maneno</h2>
-          <p className="text-umber-400 text-sm">Daily word search</p>
+          <p className="text-umber-400 text-sm">Tafuta-maneno ya kila siku</p>
         </div>
-        <span className="font-black text-umber-700">{wsFound.length}/{wsWordList.length} found</span>
+        <span className="font-black text-umber-700">{wsFound.length}/{wsWordList.length} yamepatikana</span>
       </div>
 
       {allFound ? (
         <div className="text-center py-10">
           <div className="text-6xl mb-4">🔤</div>
           <h3 className="text-2xl font-black text-umber-700 mb-2">Umepata maneno yote!</h3>
-          <p className="text-umber-400 mb-6">You found all the words!</p>
+          <p className="text-umber-400 mb-6">Umeyapata maneno yote!</p>
         </div>
       ) : (
         <>

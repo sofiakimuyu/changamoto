@@ -10,7 +10,7 @@ export default function Home() {
     <div className="max-w-3xl mx-auto pt-4">
       <div className="text-center mb-2 px-4">
         <h1 className="text-2xl font-black text-umber-700 leading-tight">Neno la Leo</h1>
-        <p className="text-umber-400 text-xs">Word of the day · #{dayNumber > 0 ? dayNumber : 1}</p>
+        <p className="text-umber-400 text-xs">Neno la siku · #{dayNumber > 0 ? dayNumber : 1}</p>
       </div>
       <Wordle config={config} ranked />
     </div>

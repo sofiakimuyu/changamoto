@@ -43,11 +43,11 @@ function Row({ rank, label, row }: { rank: number; label: string; row: LeaderRow
       <div className={`w-8 text-center font-black ${rank <= 3 ? 'text-lg' : 'text-umber-400 text-sm'}`}>{label}</div>
       <div className="flex-1 min-w-0">
         <p className={`font-bold truncate ${row.isPlayer ? 'text-ochre-700' : 'text-umber-700'}`}>
-          {row.name}{row.isPlayer && ' (you)'}
+          {row.name}{row.isPlayer && ' (wewe)'}
         </p>
         <p className="text-umber-400 text-xs">{row.detail}</p>
       </div>
-      <div className="font-black text-umber-700">{row.points}<span className="text-umber-300 text-xs font-semibold ml-1">pts</span></div>
+      <div className="font-black text-umber-700">{row.points}<span className="text-umber-300 text-xs font-semibold ml-1">pt</span></div>
     </div>
   )
 }
@@ -88,31 +88,31 @@ export default function LeaderboardPage() {
     <div className="max-w-2xl mx-auto px-4 pt-6 pb-16">
       <div className="flex items-center gap-2 mb-1">
         <Trophy className="w-6 h-6 text-ochre-500"/>
-        <h1 className="text-3xl font-black text-umber-700">Leaderboard</h1>
+        <h1 className="text-3xl font-black text-umber-700">Viongozi</h1>
       </div>
-      <p className="text-umber-400 text-sm mb-5">How you rank on the daily Neno la Leo</p>
+      <p className="text-umber-400 text-sm mb-5">Nafasi yako kwenye Neno la Leo</p>
 
       {/* Player name + stats */}
       <div className="bg-white rounded-3xl p-5 shadow-card mb-5">
         <div className="flex items-center justify-between mb-4">
           {editing ? (
             <div className="flex items-center gap-2 flex-1">
-              <input value={name} onChange={e => setName(e.target.value)} maxLength={20} placeholder="Your name"
+              <input value={name} onChange={e => setName(e.target.value)} maxLength={20} placeholder="Jina lako"
                 className="flex-1 min-w-0 px-3 py-2 rounded-xl border-2 border-sand-200 focus:border-ochre-400 outline-none font-semibold text-umber-700"/>
-              <button onClick={saveName} className="btn-primary !px-4 !py-2 flex items-center gap-1"><Check className="w-4 h-4"/> Save</button>
+              <button onClick={saveName} className="btn-primary !px-4 !py-2 flex items-center gap-1"><Check className="w-4 h-4"/> Hifadhi</button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <p className="font-black text-umber-700 text-lg">{getPlayerName() || 'You'}</p>
+              <p className="font-black text-umber-700 text-lg">{getPlayerName() || 'Wewe'}</p>
               <button onClick={() => setEditing(true)} className="text-umber-400"><Pencil className="w-4 h-4"/></button>
             </div>
           )}
         </div>
         <div className="grid grid-cols-4 gap-2 text-center">
-          <Stat label="Played" value={stats.played} />
-          <Stat label="Win %" value={`${stats.winRate}`} />
-          <Stat label="Points" value={stats.totalPoints} />
-          <Stat label="Streak" value={stats.currentStreak} icon={<Flame className="w-3.5 h-3.5 text-maasai-500 inline"/>} />
+          <Stat label="Michezo" value={stats.played} />
+          <Stat label="Ushindi %" value={`${stats.winRate}`} />
+          <Stat label="Pointi" value={stats.totalPoints} />
+          <Stat label="Mfululizo" value={stats.currentStreak} icon={<Flame className="w-3.5 h-3.5 text-maasai-500 inline"/>} />
         </div>
       </div>
 
@@ -123,27 +123,27 @@ export default function LeaderboardPage() {
             className={`flex-1 py-2.5 rounded-full font-bold text-sm transition-all ${
               tab === t ? 'bg-white text-umber-700 shadow-soft' : 'text-umber-400'
             }`}>
-            {t === 'today' ? 'Today' : 'All-time'}
+            {t === 'today' ? 'Leo' : 'Wakati wote'}
           </button>
         ))}
       </div>
 
       {board.playerRank && (
         <div className="text-center mb-4 text-umber-500 text-sm">
-          You’re <strong className="text-ochre-600">#{board.playerRank}</strong> {tab === 'today' ? 'today' : 'this season'}
+          Uko nafasi ya <strong className="text-ochre-600">#{board.playerRank}</strong> {tab === 'today' ? 'leo' : 'msimu huu'}
         </div>
       )}
       {tab === 'today' && !daily.playerRank && (
         <div className="text-center mb-4 text-umber-400 text-sm bg-sand-200 rounded-2xl py-3 px-4">
-          Play today’s Neno la Leo to join the board.
+          Cheza Neno la Leo ili ujiunge na ubao.
         </div>
       )}
 
       {loading ? (
-        <div className="text-center text-umber-400 text-sm py-10">Loading leaderboard…</div>
+        <div className="text-center text-umber-400 text-sm py-10">Inapakia viongozi…</div>
       ) : board.rows.length === 0 ? (
         <div className="text-center text-umber-400 text-sm bg-white rounded-2xl py-8 px-4 shadow-soft">
-          No scores yet — be the first on the board!
+          Bado hakuna alama — kuwa wa kwanza kwenye ubao!
         </div>
       ) : (
         <RankList rows={board.rows} playerRank={board.playerRank} />
@@ -151,8 +151,8 @@ export default function LeaderboardPage() {
 
       <p className="text-umber-300 text-[11px] text-center mt-6 leading-relaxed">
         {hasBackend
-          ? 'Scores are shared live across all players. You appear once you finish today’s Neno la Leo.'
-          : 'Your scores are real and saved on this device. The surrounding field is a simulated community shown until a shared server is connected.'}
+          ? 'Alama zinashirikiwa moja kwa moja kwa wachezaji wote. Utaonekana ukimaliza Neno la Leo la leo.'
+          : 'Alama zako ni halisi na zimehifadhiwa kwenye kifaa hiki. Washindani wanaokuzunguka ni jamii ya kuigiza inayoonyeshwa hadi seva ya pamoja iunganishwe.'}
       </p>
     </div>
   )

@@ -36,10 +36,10 @@ export interface WordleConfig {
 }
 
 const LABELS: Record<WordLength, { label: string; sublabel: string }> = {
-  3: { label: 'Neno la Herufi 3', sublabel: 'Guess the 3-letter Swahili word' },
-  4: { label: 'Neno la Herufi 4', sublabel: 'Guess the 4-letter Swahili word' },
-  5: { label: 'Neno la Leo',      sublabel: 'Guess the 5-letter Swahili word' },
-  6: { label: 'Neno la Herufi 6', sublabel: 'Guess the 6-letter Swahili word' },
+  3: { label: 'Neno la Herufi 3', sublabel: 'Bahatisha neno la herufi 3' },
+  4: { label: 'Neno la Herufi 4', sublabel: 'Bahatisha neno la herufi 4' },
+  5: { label: 'Neno la Leo',      sublabel: 'Bahatisha neno la herufi 5' },
+  6: { label: 'Neno la Herufi 6', sublabel: 'Bahatisha neno la herufi 6' },
 }
 
 function buildConfig(length: WordLength): WordleConfig {
