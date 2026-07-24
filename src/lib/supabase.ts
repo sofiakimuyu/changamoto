@@ -12,7 +12,17 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 export const hasBackend = Boolean(url && anonKey)
 
 export const supabase: SupabaseClient | null = hasBackend
-  ? createClient(url!, anonKey!, { auth: { persistSession: false } })
+  ? createClient(url!, anonKey!, {
+      auth: {
+        // Persist the login so accounts follow the player across reloads.
+        persistSession: true,
+        autoRefreshToken: true,
+        // PKCE puts the magic-link code in the query string (?code=), not the
+        // URL hash, so it never collides with our hash-based router.
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+      },
+    })
   : null
 
 // ── Anonymous device identity ────────────────────────────────────────────────

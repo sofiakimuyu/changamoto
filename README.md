@@ -59,6 +59,24 @@ The anon key is meant to be public in the client — RLS is what constrains it:
 reads are open, inserts are append-only, points must match the scoring formula,
 and one row per device per day is enforced by a unique constraint.
 
+### Accounts (Supabase Auth)
+
+The finish screen's **Sign up to track progress** uses passwordless email
+magic-links via Supabase Auth. When a player signs in, their account id becomes
+their leaderboard identity so progress follows them across devices; when signed
+out (or with no backend) an anonymous per-device id is used instead.
+
+To enable it, in the Supabase dashboard under **Authentication**:
+
+1. Ensure **Email** sign-in is enabled (it is by default).
+2. Under **URL Configuration**, set the **Site URL** and add a **Redirect URL**
+   matching where the app is served, e.g. `https://<user>.github.io/changamoto/`
+   (and `http://localhost:5173/` for local dev). The magic link uses the PKCE
+   flow, so the code returns in the query string and never collides with the
+   app's hash router.
+
+No schema change is needed — signed-in scores use the same `scores` table.
+
 ## Develop
 
 ```bash

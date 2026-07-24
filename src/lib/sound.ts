@@ -72,3 +72,38 @@ export function playFlip() {
   src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(c.destination)
   src.start(t); src.stop(t + dur + 0.02)
 }
+
+/** Triumphant little fanfare when the word is solved. Ascending arpeggio with
+ *  a soft bell timbre, plus a sparkle tail. */
+export function playWin() {
+  if (muted) return
+  const c = getCtx(); if (!c) return
+  const t0 = c.currentTime
+  // C5, E5, G5, C6 — a bright major arpeggio.
+  const notes = [523.25, 659.25, 783.99, 1046.5]
+  notes.forEach((freq, i) => {
+    const t = t0 + i * 0.1
+    const osc = c.createOscillator(); osc.type = 'triangle'; osc.frequency.value = freq
+    const osc2 = c.createOscillator(); osc2.type = 'sine'; osc2.frequency.value = freq * 2
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45)
+    const g2 = c.createGain(); g2.gain.value = 0.25
+    osc.connect(g); osc2.connect(g2); g2.connect(g); g.connect(c.destination)
+    osc.start(t); osc.stop(t + 0.5)
+    osc2.start(t); osc2.stop(t + 0.5)
+  })
+  // Sparkle: a few quick high blips after the arpeggio lands.
+  for (let i = 0; i < 5; i++) {
+    const t = t0 + 0.42 + i * 0.05
+    const osc = c.createOscillator(); osc.type = 'sine'
+    osc.frequency.value = 1400 + Math.random() * 1600
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(0.1, t + 0.01)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12)
+    osc.connect(g); g.connect(c.destination)
+    osc.start(t); osc.stop(t + 0.14)
+  }
+}

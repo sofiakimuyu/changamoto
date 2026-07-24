@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Delete, Share2, Check, Trophy } from 'lucide-react'
+import { Delete, Share2, Grid3x3, Trophy } from 'lucide-react'
 import { WordleConfig } from '../lib/wordleConfig'
 import { answerForDay, scoreGuess, getDayIndex, MAX_ROWS, LetterState } from '../lib/wordle'
 import { recordDaily, submitDaily } from '../lib/leaderboard'
 import { navigate } from '../lib/router'
-import { playType, playFlip } from '../lib/sound'
+import { playType, playFlip, playWin } from '../lib/sound'
+import Confetti from './Confetti'
+import SignUpModal from './SignUpModal'
 
 interface SavedGame {
   day: number
@@ -60,6 +62,7 @@ export default function Wordle({ config, ranked = false }: Props) {
   const [shaking, setShaking] = useState(false)
   const [revealRow, setRevealRow] = useState<number | null>(null)
   const [showResult, setShowResult] = useState(status !== 'playing')
+  const [showSignup, setShowSignup] = useState(false)
 
   const currentRef = useRef(current)
 
@@ -98,6 +101,8 @@ export default function Wordle({ config, ranked = false }: Props) {
     for (let c = 0; c < WORD_LEN; c++) setTimeout(playFlip, c * 120)
     saveGame(WORD_LEN, { day, guesses: newGuesses, status: newStatus })
 
+    // Celebration fanfare right after the last tile lands.
+    if (won) setTimeout(playWin, WORD_LEN * 120 + 220)
     if (newStatus !== 'playing') setTimeout(() => setShowResult(true), 1600)
   }, [status, guesses, answer.word, day, config, WORD_LEN, toast])
 
@@ -165,14 +170,28 @@ export default function Wordle({ config, ranked = false }: Props) {
   // Tile size shrinks as the word gets longer so the grid always fits.
   const tile = WORD_LEN >= 6 ? 'w-12 h-12 text-xl' : 'w-14 h-14 text-2xl'
 
-  const shareResult = () => {
+  const shareResult = async () => {
     const grid = guesses.map(g =>
       scoreGuess(g, answer.word).map(s => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')
     ).join('\n')
-    const header = `Changamoto ${WORD_LEN}·${config.label} · ${status === 'won' ? guesses.length : 'X'}/${MAX_ROWS}`
-    const text = `${header}\n${grid}\nchangamoto`
-    if (navigator.clipboard) { navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard')) }
-    else toast('Copy not supported')
+    const header = `Changamoto · ${config.label} · ${status === 'won' ? guesses.length : 'X'}/${MAX_ROWS}`
+    const url = 'https://sofiakimuyu.github.io/changamoto/'
+    const text = `${header}\n${grid}`
+    // Prefer the native share sheet (mobile); fall back to clipboard on desktop.
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Changamoto', text: `${text}\n`, url })
+        return
+      }
+    } catch {
+      // User cancelled the share sheet, or it failed — fall through to clipboard.
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`)
+      toast('Copied to clipboard')
+    } catch {
+      toast('Sharing not supported')
+    }
   }
 
   return (
@@ -246,6 +265,9 @@ export default function Wordle({ config, ranked = false }: Props) {
         ))}
       </div>
 
+      {/* Confetti celebration on a win */}
+      {showResult && status === 'won' && <Confetti />}
+
       {/* Result sheet */}
       {showResult && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-umber-700/40 animate-fade-in"
@@ -255,64 +277,47 @@ export default function Wordle({ config, ranked = false }: Props) {
             <div className="w-10 h-1 bg-sand-300 rounded-full mx-auto mb-4"/>
 
             <div className="text-center mb-4">
-              <div className="text-5xl mb-2">{status === 'won' ? '🎉' : '🌱'}</div>
-              <h3 className="text-2xl font-black text-umber-700">
+              <div className="text-6xl mb-2">{status === 'won' ? '🎉' : '🌱'}</div>
+              <h3 className="text-3xl font-black text-umber-700">
                 {status === 'won' ? 'Umeshinda!' : 'Karibu tena kesho'}
               </h3>
               <p className="text-umber-400 text-sm">
-                {status === 'won' ? `Solved in ${guesses.length}/${MAX_ROWS}` : 'You’ll get the next one!'}
+                {status === 'won' ? `Solved in ${guesses.length}/${MAX_ROWS}!` : 'You’ll get the next one!'}
               </p>
             </div>
 
-            {/* Answer / definition card */}
-            <div className="relative rounded-3xl p-5 mb-4 shadow-card overflow-hidden"
-              style={{ background: 'linear-gradient(135deg,#3A7A3A,#1C1209)' }}>
+            {/* The word — the celebration is the reveal itself, nothing to study */}
+            <div className="relative rounded-3xl p-6 mb-5 shadow-card overflow-hidden text-center"
+              style={{ background: status === 'won'
+                ? 'linear-gradient(135deg,#BF6E19,#9B3D2A)'
+                : 'linear-gradient(135deg,#3A7A3A,#1C1209)' }}>
               <div className="absolute inset-0 lattice-pattern opacity-20"/>
               <div className="relative">
-                <p className="text-white/60 text-[11px] font-semibold uppercase tracking-widest mb-1">Today’s word</p>
-                <h4 className="text-4xl font-black text-white uppercase tracking-wide">{answer.word}</h4>
-                {answer.pos && <p className="text-white/70 text-sm mt-1 italic">{answer.pos}</p>}
-                <p className="text-white text-lg font-bold mt-2">{answer.english}</p>
+                <p className="text-white/60 text-[11px] font-semibold uppercase tracking-widest mb-1">The word was</p>
+                <h4 className="text-5xl font-black text-white uppercase tracking-wide">{answer.word}</h4>
               </div>
             </div>
 
-            {answer.sentence && (
-              <div className="bg-white rounded-2xl p-4 mb-3 shadow-soft">
-                <p className="text-[11px] font-bold text-umber-400 uppercase tracking-widest mb-1.5">Sample sentence</p>
-                <p className="text-umber-700 font-semibold">{answer.sentence}</p>
-                {answer.sentenceEn && <p className="text-umber-400 text-sm mt-0.5 italic">{answer.sentenceEn}</p>}
-              </div>
-            )}
-
-            {answer.notes && (
-              <div className="bg-white rounded-2xl p-4 mb-4 shadow-soft">
-                <p className="text-[11px] font-bold text-umber-400 uppercase tracking-widest mb-1.5">Usage notes</p>
-                <p className="text-umber-600 text-sm leading-relaxed">{answer.notes}</p>
-              </div>
-            )}
-
-            {/* Actions */}
+            {/* Three finish options: Share · Sign up · Play more games */}
             <div className="space-y-2.5">
-              {ranked && (
-                <button onClick={() => navigate('/leaderboard')}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold btn-primary">
-                  <Trophy className="w-5 h-5"/> View leaderboard
-                </button>
-              )}
-              <div className="flex gap-2.5">
-                <button onClick={shareResult}
-                  className="flex-1 flex items-center justify-center gap-2 bg-white border-2 border-sand-200 text-umber-600 font-semibold py-4 rounded-full">
-                  <Share2 className="w-4 h-4"/> Share
-                </button>
-                <button onClick={() => setShowResult(false)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-umber-700 text-white font-semibold py-4 rounded-full">
-                  Done <Check className="w-4 h-4"/>
-                </button>
-              </div>
+              <button onClick={shareResult}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold btn-primary">
+                <Share2 className="w-5 h-5"/> Share
+              </button>
+              <button onClick={() => setShowSignup(true)}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
+                <Trophy className="w-5 h-5"/> Sign up to track progress
+              </button>
+              <button onClick={() => navigate('/games')}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-semibold bg-white border-2 border-sand-200 text-umber-600 active:scale-95 transition-transform">
+                <Grid3x3 className="w-5 h-5"/> Play more games
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {showSignup && <SignUpModal onClose={() => setShowSignup(false)} />}
     </div>
   )
 }

@@ -14,6 +14,13 @@
 import { MAX_ROWS, getDayIndex } from './wordle'
 import { supabase, hasBackend, getClientId } from './supabase'
 
+// When a player signs in, their auth user id becomes their leaderboard identity
+// (so progress follows them across devices); otherwise the anonymous device id
+// is used. Kept in a module var, updated by the auth listener.
+let authUserId: string | null = null
+export function setAuthUserId(id: string | null) { authUserId = id }
+function identityId(): string { return authUserId ?? getClientId() }
+
 const NAME_KEY = 'changamoto_player_name'
 const RESULTS_KEY = 'changamoto_daily_results_v1'
 
@@ -220,7 +227,7 @@ export async function submitDaily(day: number): Promise<void> {
   const { error } = await supabase
     .from('scores')
     .upsert(
-      { client_id: getClientId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points },
+      { client_id: identityId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points },
       { onConflict: 'client_id,day', ignoreDuplicates: true },
     )
   if (error) console.warn('submitDaily failed:', error.message)
@@ -236,7 +243,7 @@ function rankRows(rows: LeaderRow[]): { rows: LeaderRow[]; playerRank: number | 
 export async function getDailyBoard(day: number): Promise<{ rows: LeaderRow[]; playerRank: number | null }> {
   if (!hasBackend || !supabase) return getSimulatedDaily(day)
 
-  const me = getClientId()
+  const me = identityId()
   const { data, error } = await supabase
     .from('scores')
     .select('client_id,name,points,solved,guesses')
@@ -257,7 +264,7 @@ export async function getDailyBoard(day: number): Promise<{ rows: LeaderRow[]; p
 export async function getAllTimeBoard(): Promise<{ rows: LeaderRow[]; playerRank: number | null }> {
   if (!hasBackend || !supabase) return getSimulatedAllTime()
 
-  const me = getClientId()
+  const me = identityId()
   const { data, error } = await supabase
     .from('alltime_leaderboard')
     .select('client_id,name,points,played,wins')
