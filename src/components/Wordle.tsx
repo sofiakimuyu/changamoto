@@ -8,6 +8,7 @@ import { navigate } from '../lib/router'
 import { playType, playFlip, playWin } from '../lib/sound'
 import Confetti from './Confetti'
 import SignUpModal from './SignUpModal'
+import { useAuth } from '../lib/auth'
 
 interface SavedGame {
   day: number
@@ -65,6 +66,7 @@ export default function Wordle({ config, ranked = false }: Props) {
   const [showResult, setShowResult] = useState(status !== 'playing')
   const [showSignup, setShowSignup] = useState(false)
 
+  const { user } = useAuth()
   const currentRef = useRef(current)
 
   const gameKey = `wordle-${WORD_LEN}`
@@ -322,10 +324,18 @@ export default function Wordle({ config, ranked = false }: Props) {
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold btn-primary">
                 <Share2 className="w-5 h-5"/> Shiriki
               </button>
-              <button onClick={() => setShowSignup(true)}
-                className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
-                <Trophy className="w-5 h-5"/> Jisajili kufuatilia maendeleo
-              </button>
+              {user ? (
+                // Already signed in — offer the standings instead of signing up.
+                <button onClick={() => navigate('/leaderboard')}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
+                  <Trophy className="w-5 h-5"/> Tazama ubao wa viongozi
+                </button>
+              ) : (
+                <button onClick={() => setShowSignup(true)}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
+                  <Trophy className="w-5 h-5"/> Jisajili kufuatilia maendeleo
+                </button>
+              )}
               <button onClick={() => navigate('/games')}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-semibold bg-white border-2 border-sand-200 text-umber-600 active:scale-95 transition-transform">
                 <Grid3x3 className="w-5 h-5"/> Cheza michezo zaidi
