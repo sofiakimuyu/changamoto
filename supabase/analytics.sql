@@ -4,8 +4,11 @@
 --
 -- Model: an append-only stream of anonymous usage events. Each event ties to a
 -- device (client_id) and a browsing session (session_id) so we can measure how
--- many people use the game and how often. No personal data is collected — the
--- anon (public) key may INSERT and SELECT only, guarded by Row Level Security.
+-- many people use the game and how often. No personal data is collected.
+--
+-- Privacy: anyone may INSERT events (so the game can log usage), but READING the
+-- data is restricted to admins listed in `analytics_admins` (see below). The
+-- dashboard is private to you — other players cannot query the analytics.
 
 -- ── Events table ──────────────────────────────────────────────────────────────
 create table if not exists public.events (
@@ -27,29 +30,65 @@ create index if not exists events_name_idx      on public.events (name);
 create index if not exists events_client_idx    on public.events (client_id);
 create index if not exists events_game_idx      on public.events (game);
 
+-- ── Admin allowlist ───────────────────────────────────────────────────────────
+-- Only the emails in this table may READ analytics. Everyone can still WRITE
+-- events (so the game can log usage), but the dashboard is private to admins.
+-- After running this file, add yourself: Table Editor → analytics_admins →
+-- Insert row → your account email (the one you sign in with).
+create table if not exists public.analytics_admins (
+  email text primary key,
+  added_at timestamptz not null default now()
+);
+alter table public.analytics_admins enable row level security;
+-- An admin may see their own allowlist row; nobody else can read the list.
+drop policy if exists "admins see themselves" on public.analytics_admins;
+create policy "admins see themselves"
+  on public.analytics_admins for select
+  using ((auth.jwt() ->> 'email') = email);
+
+-- Helper: is the currently signed-in user an analytics admin? SECURITY DEFINER
+-- so it can consult the allowlist regardless of the caller's own RLS.
+create or replace function public.is_analytics_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.analytics_admins a
+    where a.email = (auth.jwt() ->> 'email')
+  );
+$$;
+grant execute on function public.is_analytics_admin() to anon, authenticated;
+
 -- ── Row Level Security ────────────────────────────────────────────────────────
 alter table public.events enable row level security;
 
--- Anyone (anon) may read aggregates via the views below; direct table reads are
--- also allowed (the data is non-personal). Tighten to service-role only if you
--- prefer the dashboard to read exclusively through the aggregate views.
+-- READ is restricted to admins only — the raw event stream is private. (Reads go
+-- through the security_invoker views below, which inherit this policy.)
 drop policy if exists "events are public" on public.events;
-create policy "events are public"
+drop policy if exists "only admins read events" on public.events;
+create policy "only admins read events"
   on public.events for select
-  using (true);
+  using (public.is_analytics_admin());
 
--- Anyone (anon) may record an event. No UPDATE/DELETE policies → append-only.
+-- WRITE stays open so every player's client can log usage. Insert doesn't return
+-- rows (supabase-js insert is minimal), so it needs no read access.
+-- No UPDATE/DELETE policies → append-only.
 drop policy if exists "anyone can log an event" on public.events;
 create policy "anyone can log an event"
   on public.events for insert
   with check (true);
 
 -- ── Aggregate views ───────────────────────────────────────────────────────────
--- All views are SELECT-only summaries; grant read to anon/auth so the static
--- dashboard can query them with the public key.
+-- SELECT-only summaries. Declared `security_invoker` so they run with the
+-- querying user's privileges and inherit the admin-only RLS on `events` above —
+-- i.e. a non-admin who queries them sees no underlying rows. Grants below are
+-- limited to `authenticated` (revoked from `anon`).
 
 -- Headline totals: lifetime unique devices, sessions, events, and game plays.
-create or replace view public.analytics_overview as
+create or replace view public.analytics_overview
+  with (security_invoker = on) as
 select
   count(distinct client_id)                                            as total_users,
   count(distinct session_id)                                           as total_sessions,
@@ -63,7 +102,8 @@ from public.events;
 
 -- Daily activity: one row per calendar day (UTC) with active users, sessions,
 -- new users (first-ever-seen that day) and plays. Powers the trend chart.
-create or replace view public.analytics_daily as
+create or replace view public.analytics_daily
+  with (security_invoker = on) as
 with firsts as (
   select client_id, min(created_at)::date as first_day
   from public.events group by client_id
@@ -81,7 +121,8 @@ group by e.created_at::date
 order by day;
 
 -- Popularity per game: plays, completions, unique players, completion rate.
-create or replace view public.analytics_games as
+create or replace view public.analytics_games
+  with (security_invoker = on) as
 select
   coalesce(game, 'unknown')                              as game,
   count(*) filter (where name = 'game_start')            as plays,
@@ -98,7 +139,8 @@ order by plays desc;
 
 -- Engagement / stickiness: how many days each device has been active, bucketed.
 -- (1 day = one-and-done, higher buckets = returning players.)
-create or replace view public.analytics_retention as
+create or replace view public.analytics_retention
+  with (security_invoker = on) as
 with per_user as (
   select client_id, count(distinct created_at::date) as active_days
   from public.events group by client_id
@@ -114,9 +156,16 @@ select
 from per_user
 group by 1;
 
+revoke select on
+  public.analytics_overview,
+  public.analytics_daily,
+  public.analytics_games,
+  public.analytics_retention
+from anon;
+
 grant select on
   public.analytics_overview,
   public.analytics_daily,
   public.analytics_games,
   public.analytics_retention
-to anon, authenticated;
+to authenticated;
