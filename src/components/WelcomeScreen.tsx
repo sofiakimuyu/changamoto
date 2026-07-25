@@ -1,5 +1,8 @@
 import { getDayIndex } from '../lib/wordle'
 
+// Wordmark tile colors, cycled across the letters — navy, teal, gold, terracotta.
+const TILE_COLORS = ['#34495E', '#4A9E8E', '#D9A93C', '#C05E45']
+
 // First-load splash, mirroring the NYT Wordle welcome: a small tiled logo, the
 // stylized wordmark, a one-line pitch, and two ways in — sign in, or just play.
 // "Cheza" hands off to the how-to-play screen; "Ingia" opens the account panel.
@@ -9,20 +12,16 @@ export default function WelcomeScreen({ onPlay, onLogin }: { onPlay: () => void;
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-sand-100 px-6 animate-fade-in">
-      {/* Mini tiled mark — the game's board in miniature */}
-      <div className="grid grid-cols-3 gap-1 mb-6" aria-hidden>
-        {['bg-white','bg-white','bg-white',
-          'bg-white','bg-saffron-400','bg-savanna-500',
-          'bg-savanna-500','bg-savanna-500','bg-savanna-500'].map((c, i) => (
-          <div key={i} className={`w-9 h-9 rounded-md border-2 border-umber-700 ${c}`} />
+      {/* Wordmark as colored letter tiles */}
+      <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2 mb-6" aria-label="changamoto">
+        {'CHANGAMOTO'.split('').map((letter, i) => (
+          <span key={i} aria-hidden
+            className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center text-white font-black text-lg sm:text-2xl shadow-soft"
+            style={{ background: TILE_COLORS[i % TILE_COLORS.length] }}>
+            {letter}
+          </span>
         ))}
       </div>
-
-      {/* Stylized wordmark */}
-      <h1 className="text-5xl sm:text-6xl font-black text-umber-700 tracking-tight lowercase mb-4"
-        style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>
-        changamoto
-      </h1>
 
       {/* Swahili pitch */}
       <p className="text-center text-2xl sm:text-3xl font-semibold text-umber-700 leading-snug max-w-md mb-8">
