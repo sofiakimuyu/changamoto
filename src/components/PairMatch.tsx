@@ -3,7 +3,7 @@ import { Check } from 'lucide-react'
 import { VOCAB_CATEGORIES } from '../data/vocab-categories'
 import { seededShuffle } from '../lib/wordsearch'
 import { getDayIndex } from '../lib/wordle'
-import Confetti from './Confetti'
+import WinSheet from './WinSheet'
 
 const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
 
@@ -21,6 +21,7 @@ export default function PairMatch() {
   const [matched, setMatched] = useState<string[]>([])
   const [matchedEnglish, setMatchedEnglish] = useState<string[]>([])
   const [wrongFlash, setWrongFlash] = useState<string | null>(null)
+  const [showWin, setShowWin] = useState(true)
   const puzzleDone = matched.length === puzzlePairs.length
 
   const tapSwahili = (sw: string) => { if (!matched.includes(sw)) setSelectedSw(sw) }
@@ -41,10 +42,15 @@ export default function PairMatch() {
 
       {puzzleDone ? (
         <div className="text-center py-10">
-          <Confetti />
           <div className="text-6xl mb-4">✦</div>
           <h3 className="text-2xl font-black text-umber-700 mb-2">Umefanikiwa!</h3>
           <p className="text-umber-400 mb-6">Umeoanisha jozi zote {puzzlePairs.length}!</p>
+          {showWin && (
+            <WinSheet emoji="✦" title="Umeshinda!"
+              subtitle={`Umeoanisha jozi zote ${puzzlePairs.length}!`}
+              shareText={`Changamoto · Oanisha Maneno · ${puzzlePairs.length}/${puzzlePairs.length}`}
+              onClose={() => setShowWin(false)} />
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
