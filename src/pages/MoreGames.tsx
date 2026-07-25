@@ -12,6 +12,7 @@ interface GameCard {
 }
 
 const GAMES: GameCard[] = [
+  { route: '/', emoji: '🟩', title: 'Neno la Leo', subtitle: 'Wordle ya kawaida ya herufi 5', gradient: 'linear-gradient(135deg,#9B3D2A,#1C1209)', len: 5 },
   { route: '/wordle/3', emoji: '🔤', title: 'Neno la Herufi 3', subtitle: 'Wordle ya herufi 3', gradient: 'linear-gradient(135deg,#3A7A3A,#1C1209)', len: 3 },
   { route: '/wordle/4', emoji: '🔡', title: 'Neno la Herufi 4', subtitle: 'Wordle ya herufi 4', gradient: 'linear-gradient(135deg,#BF6E19,#1C1209)', len: 4 },
   { route: '/wordle/6', emoji: '🔠', title: 'Neno la Herufi 6', subtitle: 'Wordle ya herufi 6', gradient: 'linear-gradient(135deg,#2952CC,#091A57)', len: 6 },
