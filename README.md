@@ -77,6 +77,58 @@ To enable it, in the Supabase dashboard under **Authentication**:
 
 No schema change is needed — signed-in scores use the same `scores` table.
 
+## Usage analytics
+
+A privacy-light analytics backend tracks **how many people use the game and how
+often**, surfaced on a **private** in-app dashboard at `#/analytics`. It reuses
+the same Supabase project as the leaderboard and is entirely optional — with no
+backend configured, nothing is collected and the dashboard shows a setup note.
+
+The dashboard is a **separate internal page** with its own HTML entry point and
+bundle (`admin.html` / `src/admin.tsx`) — it is not part of the game app, has no
+nav link, and isn't routed to from anywhere in the site. Reach it directly at
+`https://<your-site>/admin.html` and enter the passphrase (`changamoto` by
+default — change `DASHBOARD_PASSWORD` in `src/pages/AnalyticsPage.tsx`).
+
+The passphrase is a **light gate, not real security**: the page is a public
+static file, so anyone who knows the word (or reads the client bundle) can view
+the aggregate stats. What is protected at the database level is the **raw event
+stream** — it has no SELECT policy, so only the non-personal aggregate views are
+ever exposed. Players can *write* events but nobody can read individual rows
+through the API.
+
+What's tracked (all anonymous, no personal data):
+
+- **`session_start`** — a new visit (a fresh session after ~30 min idle).
+- **`page_view`** — each route the player opens.
+- **`game_start` / `game_complete`** — a game opened / finished, with outcome
+  (`solved`, `guesses`) in `props`.
+
+Events tie to a stable per-device `client_id` (a "user") and a rotating
+`session_id` (a "visit"), so the dashboard can report:
+
+- Lifetime **users**, **sessions**, **plays**, and total events.
+- **Active users** over 1 / 7 / 30 days.
+- A **daily trend** of active users and plays.
+- **Per-game popularity** with completion rates.
+- **Returning-player** engagement (how many distinct days each device plays).
+
+### Set up analytics
+
+1. With the shared backend configured (above), in **SQL Editor → New query**
+   paste [`supabase/analytics.sql`](supabase/analytics.sql) and **Run**. This
+   creates the append-only `events` table (insert-only; no read policy on the raw
+   rows) and the definer aggregate views the dashboard reads
+   (`analytics_overview` / `analytics_daily` / `analytics_games` /
+   `analytics_retention`). Safe to re-run.
+2. Open `<your-site>/admin.html`, enter the passphrase, and view the dashboard.
+   The game logs events automatically for everyone — no player login required.
+
+Privacy model: the anon key is safe in the client — the raw `events` rows have
+no SELECT policy so they can't be read through the API; only the non-personal
+aggregate views (definer, granted to the public key) are exposed. The dashboard
+passphrase is client-side obscurity on top of that.
+
 ## Develop
 
 ```bash

@@ -3,6 +3,7 @@ import { Delete, Share2, Grid3x3, Trophy } from 'lucide-react'
 import { WordleConfig } from '../lib/wordleConfig'
 import { answerForDay, scoreGuess, getDayIndex, MAX_ROWS, LetterState } from '../lib/wordle'
 import { recordDaily, submitDaily } from '../lib/leaderboard'
+import { trackGameStart, trackGameComplete } from '../lib/analytics'
 import { navigate } from '../lib/router'
 import { playType, playFlip, playWin } from '../lib/sound'
 import Confetti from './Confetti'
@@ -66,6 +67,14 @@ export default function Wordle({ config, ranked = false }: Props) {
 
   const currentRef = useRef(current)
 
+  const gameKey = `wordle-${WORD_LEN}`
+
+  // Log that this game was opened, once per mount.
+  useEffect(() => {
+    trackGameStart(gameKey, `/wordle/${WORD_LEN}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameKey])
+
   // Record the outcome to the leaderboard once, for the ranked (daily) game.
   useEffect(() => {
     if (ranked && status !== 'playing') {
@@ -74,6 +83,15 @@ export default function Wordle({ config, ranked = false }: Props) {
       submitDaily(day)
     }
   }, [ranked, status, day, guesses.length])
+
+  // Log completion once, the moment a fresh game reaches a terminal state.
+  const completeLogged = useRef(status !== 'playing')
+  useEffect(() => {
+    if (status !== 'playing' && !completeLogged.current) {
+      completeLogged.current = true
+      trackGameComplete(gameKey, { solved: status === 'won', guesses: guesses.length, ranked })
+    }
+  }, [status, gameKey, guesses.length, ranked])
 
   const toast = useCallback((msg: string) => {
     setMessage(msg)
