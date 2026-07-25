@@ -84,10 +84,14 @@ often**, surfaced on a **private** in-app dashboard at `#/analytics`. It reuses
 the same Supabase project as the leaderboard and is entirely optional — with no
 backend configured, nothing is collected and the dashboard shows a setup note.
 
-The dashboard is **owner-only**: any player's client can *write* usage events,
-but *reading* the analytics is restricted to accounts on the `analytics_admins`
-allowlist. There is no nav link — reach it directly at
-`https://<your-site>/#/analytics` and sign in with your admin email.
+The dashboard is a **separate internal page** with its own HTML entry point and
+bundle (`admin.html` / `src/admin.tsx`) — it is not part of the game app, has no
+nav link, and isn't routed to from anywhere in the site. Reach it directly at
+`https://<your-site>/admin.html`.
+
+It is also **owner-only**: any player's client can *write* usage events, but
+*reading* the analytics is restricted to accounts on the `analytics_admins`
+allowlist. Sign in on that page with your admin email to view it.
 
 What's tracked (all anonymous, no personal data):
 
@@ -117,8 +121,8 @@ Events tie to a stable per-device `client_id` (a "user") and a rotating
    analytics.
 3. Ensure **Email** auth is enabled and your site URL is in the Auth **URL
    Configuration** (same as Accounts above) so the sign-in magic link works.
-4. Open `#/analytics`, sign in with your admin email, and view the dashboard.
-   The client logs events automatically for everyone.
+4. Open `<your-site>/admin.html`, sign in with your admin email, and view the
+   dashboard. The game logs events automatically for everyone.
 
 Privacy model: the anon key is safe in the client — RLS keeps `events`
 append-only and its rows **unreadable** to non-admins. The aggregate views are
