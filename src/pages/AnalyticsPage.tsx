@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Users, Activity, Gamepad2, Repeat } from 'lucide-react'
+import { BarChart3, Users, Activity, Gamepad2, Repeat, Lock, Mail, LogOut } from 'lucide-react'
 import { supabase, hasBackend } from '../lib/supabase'
+import { useAuth, sendMagicLink, signOut } from '../lib/auth'
 
 // ── Shapes returned by the analytics_* views (supabase/analytics.sql) ─────────
 interface Overview {
@@ -29,15 +30,30 @@ const GAME_LABELS: Record<string, string> = {
 const gameLabel = (k: string) => GAME_LABELS[k] ?? k
 
 export default function AnalyticsPage() {
+  const { user, loading: authLoading } = useAuth()
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [daily, setDaily] = useState<DailyRow[]>([])
   const [games, setGames] = useState<GameRow[]>([])
   const [retention, setRetention] = useState<RetentionRow[]>([])
-  const [loading, setLoading] = useState(hasBackend)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Once signed in, ask the backend whether this account is an analytics admin.
   useEffect(() => {
-    if (!hasBackend || !supabase) return
+    if (!hasBackend || !supabase || !user) { setIsAdmin(null); return }
+    let alive = true
+    supabase.rpc('is_analytics_admin').then(({ data, error }) => {
+      if (!alive) return
+      if (error) { setError(error.message); setIsAdmin(false); return }
+      setIsAdmin(Boolean(data))
+    })
+    return () => { alive = false }
+  }, [user])
+
+  // Load the dashboard only for a confirmed admin.
+  useEffect(() => {
+    if (!hasBackend || !supabase || isAdmin !== true) return
     let alive = true
     setLoading(true)
     Promise.all([
@@ -56,7 +72,7 @@ export default function AnalyticsPage() {
       setLoading(false)
     })
     return () => { alive = false }
-  }, [])
+  }, [isAdmin])
 
   return (
     <div className="max-w-3xl mx-auto px-4 pt-6 pb-16">
@@ -68,6 +84,14 @@ export default function AnalyticsPage() {
 
       {!hasBackend ? (
         <NoBackend />
+      ) : authLoading ? (
+        <div className="text-center text-umber-400 text-sm py-10">Inapakia…</div>
+      ) : !user ? (
+        <SignInGate />
+      ) : isAdmin === null ? (
+        <div className="text-center text-umber-400 text-sm py-10">Inathibitisha ufikiaji…</div>
+      ) : !isAdmin ? (
+        <NotAuthorized email={user.email ?? ''} />
       ) : loading ? (
         <div className="text-center text-umber-400 text-sm py-10">Inapakia takwimu…</div>
       ) : (
@@ -227,6 +251,71 @@ function Retention({ rows }: { rows: RetentionRow[] }) {
         )
       })}
       <p className="text-umber-300 text-[11px] pt-1">Idadi ya siku tofauti kila kifaa kimecheza.</p>
+    </div>
+  )
+}
+
+// Private dashboard: sign-in gate. Only accounts on the analytics_admins
+// allowlist (in Supabase) can actually read the data — see supabase/analytics.sql.
+function SignInGate() {
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const submit = async () => {
+    setErr(null)
+    if (!/^\S+@\S+\.\S+$/.test(email)) { setErr('Weka anwani sahihi ya barua pepe.'); return }
+    setBusy(true)
+    const { error } = await sendMagicLink(email)
+    setBusy(false)
+    if (error) setErr(error); else setSent(true)
+  }
+
+  return (
+    <div className="bg-white rounded-3xl p-6 shadow-card max-w-sm mx-auto text-center">
+      <div className="w-12 h-12 rounded-full bg-sand-200 flex items-center justify-center mx-auto mb-3">
+        <Lock className="w-6 h-6 text-umber-500" />
+      </div>
+      <h2 className="font-black text-umber-700 mb-1">Takwimu ni za faragha</h2>
+      <p className="text-umber-400 text-sm mb-5">Ingia kwa barua pepe yako ya msimamizi ili kuona takwimu.</p>
+      {sent ? (
+        <p className="text-umber-500 text-sm">
+          Tumetuma kiungo cha kuingia kwa <strong>{email}</strong>. Kifungue kwenye kifaa hiki ili kuendelea.
+        </p>
+      ) : (
+        <>
+          <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="wewe@mfano.com"
+            className="w-full px-3 py-2.5 rounded-xl border-2 border-sand-200 focus:border-ochre-400 outline-none font-semibold text-umber-700" />
+          {err && <p className="text-maasai-600 text-sm mt-3">{err}</p>}
+          <button onClick={submit} disabled={busy}
+            className="w-full btn-primary mt-4 flex items-center justify-center gap-2 disabled:opacity-60">
+            <Mail className="w-4 h-4" /> {busy ? 'Inatuma…' : 'Tuma kiungo cha kuingia'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Signed in, but not on the admin allowlist.
+function NotAuthorized({ email }: { email: string }) {
+  return (
+    <div className="bg-white rounded-3xl p-6 shadow-card max-w-sm mx-auto text-center">
+      <div className="w-12 h-12 rounded-full bg-maasai-100 flex items-center justify-center mx-auto mb-3">
+        <Lock className="w-6 h-6 text-maasai-600" />
+      </div>
+      <h2 className="font-black text-umber-700 mb-1">Huna ruhusa</h2>
+      <p className="text-umber-400 text-sm mb-2">
+        Umeingia kama <strong>{email}</strong>, lakini akaunti hii si msimamizi wa takwimu.
+      </p>
+      <p className="text-umber-300 text-[12px] mb-5">
+        Ongeza barua pepe hii kwenye jedwali la <code>analytics_admins</code> kwenye Supabase ili kupata ufikiaji.
+      </p>
+      <button onClick={() => signOut()}
+        className="w-full bg-white border-2 border-sand-200 text-umber-600 font-semibold py-2.5 rounded-full flex items-center justify-center gap-2">
+        <LogOut className="w-4 h-4" /> Toka
+      </button>
     </div>
   )
 }

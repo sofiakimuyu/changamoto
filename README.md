@@ -80,9 +80,14 @@ No schema change is needed — signed-in scores use the same `scores` table.
 ## Usage analytics
 
 A privacy-light analytics backend tracks **how many people use the game and how
-often**, surfaced on the in-app **Takwimu** dashboard (`#/analytics`). It reuses
+often**, surfaced on a **private** in-app dashboard at `#/analytics`. It reuses
 the same Supabase project as the leaderboard and is entirely optional — with no
 backend configured, nothing is collected and the dashboard shows a setup note.
+
+The dashboard is **owner-only**: any player's client can *write* usage events,
+but *reading* the analytics is restricted to accounts on the `analytics_admins`
+allowlist. There is no nav link — reach it directly at
+`https://<your-site>/#/analytics` and sign in with your admin email.
 
 What's tracked (all anonymous, no personal data):
 
@@ -104,14 +109,21 @@ Events tie to a stable per-device `client_id` (a "user") and a rotating
 
 1. With the shared backend configured (above), in **SQL Editor → New query**
    paste [`supabase/analytics.sql`](supabase/analytics.sql) and **Run**. This
-   creates the append-only `events` table (public read, append-only insert via
-   RLS) and the `analytics_overview` / `analytics_daily` / `analytics_games` /
-   `analytics_retention` aggregate views the dashboard reads.
-2. That's it — the client logs events automatically. Open `#/analytics` to view
-   the dashboard.
+   creates the append-only `events` table (append-only insert, admin-only read
+   via RLS), the `analytics_admins` allowlist, the `is_analytics_admin()` helper,
+   and the `security_invoker` aggregate views the dashboard reads.
+2. **Grant yourself access:** Table Editor → `analytics_admins` → **Insert row**
+   → your account email (the one you sign in with). Only listed emails can read
+   analytics.
+3. Ensure **Email** auth is enabled and your site URL is in the Auth **URL
+   Configuration** (same as Accounts above) so the sign-in magic link works.
+4. Open `#/analytics`, sign in with your admin email, and view the dashboard.
+   The client logs events automatically for everyone.
 
-Like the leaderboard, the anon key is safe in the client: RLS keeps `events`
-read-only and append-only, and only non-personal usage data is written.
+Privacy model: the anon key is safe in the client — RLS keeps `events`
+append-only and its rows **unreadable** to non-admins. The aggregate views are
+declared `security_invoker`, so they inherit that admin-only read policy; a
+signed-in non-admin (or anonymous visitor) sees no data.
 
 ## Develop
 
