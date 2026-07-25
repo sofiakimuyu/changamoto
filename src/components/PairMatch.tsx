@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { VOCAB_CATEGORIES } from '../data/vocab-categories'
 import { seededShuffle } from '../lib/wordsearch'
 import { getDayIndex } from '../lib/wordle'
+import { recordCompletion, submitDaily, MATCH_GAME, MATCH_POINTS } from '../lib/leaderboard'
 import WinSheet from './WinSheet'
 
 const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
@@ -22,7 +23,17 @@ export default function PairMatch() {
   const [matchedEnglish, setMatchedEnglish] = useState<string[]>([])
   const [wrongFlash, setWrongFlash] = useState<string | null>(null)
   const [showWin, setShowWin] = useState(true)
-  const puzzleDone = matched.length === puzzlePairs.length
+  const puzzleDone = puzzlePairs.length > 0 && matched.length === puzzlePairs.length
+
+  // Award daily points once for matching every pair.
+  const scored = useRef(false)
+  useEffect(() => {
+    if (puzzleDone && !scored.current) {
+      scored.current = true
+      recordCompletion(dayIdx, MATCH_GAME, MATCH_POINTS)
+      submitDaily(dayIdx)
+    }
+  }, [puzzleDone, dayIdx])
 
   const tapSwahili = (sw: string) => { if (!matched.includes(sw)) setSelectedSw(sw) }
   const tapEnglish = (en: string) => {

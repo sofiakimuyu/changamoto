@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Delete, Share2, Grid3x3, Trophy } from 'lucide-react'
 import { WordleConfig } from '../lib/wordleConfig'
 import { answerForDay, scoreGuess, getDayIndex, MAX_ROWS, LetterState } from '../lib/wordle'
-import { recordDaily, submitDaily } from '../lib/leaderboard'
+import { recordDaily, submitDaily, wordleGame } from '../lib/leaderboard'
 import { trackGameStart, trackGameComplete } from '../lib/analytics'
 import { navigate } from '../lib/router'
 import { playType, playFlip, playWin } from '../lib/sound'
@@ -77,14 +77,15 @@ export default function Wordle({ config, ranked = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameKey])
 
-  // Record the outcome to the leaderboard once, for the ranked (daily) game.
+  // Record the outcome to the leaderboard once. Every wordle length earns points
+  // under its own game id (won → by guesses; lost → participation points).
   useEffect(() => {
-    if (ranked && status !== 'playing') {
-      recordDaily(day, status === 'won', guesses.length)
+    if (status !== 'playing') {
+      recordDaily(day, status === 'won', guesses.length, wordleGame(WORD_LEN))
       // Publish to the shared leaderboard (no-op when no backend is configured).
       submitDaily(day)
     }
-  }, [ranked, status, day, guesses.length])
+  }, [status, day, guesses.length, WORD_LEN])
 
   // Log completion once, the moment a fresh game reaches a terminal state.
   const completeLogged = useRef(status !== 'playing')

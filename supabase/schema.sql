@@ -1,10 +1,12 @@
 -- Changamoto shared leaderboard schema.
 -- Run this in your Supabase project: SQL Editor → New query → paste → Run.
 --
--- Model: one row per device (client_id) per day for the ranked daily game
--- (the 5-letter Neno la Leo). Anonymous — no auth; a random client_id ties a
--- player's days together for all-time totals. The anon (public) key may INSERT
--- and SELECT only, guarded by Row Level Security and integrity checks below.
+-- Model: one row per device (client_id) per day per game. A player earns points
+-- for every game they finish that day — the wordles (3/4/5/6 letters) and the
+-- completion games (word search, pair match). Anonymous — no auth; a random
+-- client_id ties a player's days together for all-time totals. The anon (public)
+-- key may INSERT and SELECT only, guarded by Row Level Security and the checks
+-- below.
 
 -- ── Table ─────────────────────────────────────────────────────────────────────
 create table if not exists public.scores (
@@ -12,18 +14,31 @@ create table if not exists public.scores (
   client_id  text not null check (char_length(client_id) between 1 and 64),
   name       text not null check (char_length(name) between 1 and 20),
   day        integer not null,
+  game       text not null default 'wordle-5' check (char_length(game) between 1 and 32),
   solved     boolean not null,
-  guesses    integer not null check (guesses between 1 and 6),
-  points     integer not null check (points between 0 and 120),
+  guesses    integer not null check (guesses between 0 and 6),
+  points     integer not null check (points between 0 and 200),
   created_at timestamptz not null default now(),
-  -- First finished result per device per day wins; blocks spam / re-rolls.
-  unique (client_id, day),
+  -- First finished result per device per day per game wins; blocks spam / re-rolls.
+  unique (client_id, day, game),
   -- Points must match the client scoring formula, so a tampered client can't
-  -- inflate its score: solved → max(20,(6-guesses+1)*20); lost → 0.
-  check (points = case when solved then greatest(20, (6 - guesses + 1) * 20) else 0 end)
+  -- inflate its score. Wordles: solved-in-1 → 150, else max(20,(6-guesses+1)*20);
+  -- lost → 5 participation points. Completion games are validated by range only.
+  check (
+    case when game like 'wordle-%'
+      then points = case when solved
+                      then (case when guesses <= 1 then 150 else greatest(20, (6 - guesses + 1) * 20) end)
+                      else 5 end
+      else points between 0 and 200
+    end
+  )
 );
 
+-- Existing databases: add the game column and swap the uniqueness scope.
+alter table public.scores add column if not exists game text not null default 'wordle-5';
+
 create index if not exists scores_day_points_idx on public.scores (day, points desc);
+create index if not exists scores_day_game_points_idx on public.scores (day, game, points desc);
 
 -- ── Row Level Security ────────────────────────────────────────────────────────
 alter table public.scores enable row level security;

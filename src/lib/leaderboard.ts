@@ -22,15 +22,29 @@ export function setAuthUserId(id: string | null) { authUserId = id }
 function identityId(): string { return authUserId ?? getClientId() }
 
 const NAME_KEY = 'changamoto_player_name'
-const RESULTS_KEY = 'changamoto_daily_results_v1'
+const RESULTS_KEY = 'changamoto_daily_results_v2'
+const RESULTS_KEY_V1 = 'changamoto_daily_results_v1'
 
 // First day the all-time season counts from (the app's launch day index).
 export const LAUNCH_DAY = 20658 // 2026-07-24
 
+// The featured daily game whose head-to-head board is shown on the "Leo" tab.
+export const FEATURED_GAME = 'wordle-5'
+
+// Every game that can earn leaderboard points. Wordles are scored by guesses;
+// the completion games award a flat bonus for finishing the daily puzzle.
+export function wordleGame(len: number): string { return `wordle-${len}` }
+export const WORDSEARCH_GAME = 'wordsearch'
+export const MATCH_GAME = 'match'
+// Flat points for finishing the two completion games (no guess/loss scale).
+export const WORDSEARCH_POINTS = 100
+export const MATCH_POINTS = 60
+
 export interface DailyResult {
   day: number
+  game: string    // e.g. "wordle-5", "wordsearch", "match"
   solved: boolean
-  guesses: number // number of guesses used (rows played)
+  guesses: number // guesses used for wordles; 0 for completion games
   points: number
   ts: number
 }
@@ -43,10 +57,15 @@ export interface LeaderRow {
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────
-/** Points for a finished daily game. Fewer guesses → more points; a loss = 0. */
+/**
+ * Points for a finished wordle. Fewer guesses → more points; even a loss earns
+ * a small participation reward for showing up.
+ *   solved in 1 guess → 150; 2→100, 3→80, 4→60, 5→40, 6→20; a loss → 5.
+ */
 export function pointsFor(solved: boolean, guesses: number): number {
-  if (!solved) return 0
-  return Math.max(20, (MAX_ROWS - guesses + 1) * 20) // 1 guess→120 … 6 guesses→20
+  if (!solved) return 5 // participation points, even without a correct guess
+  if (guesses <= 1) return 150 // ace bonus for a first-guess solve
+  return Math.max(20, (MAX_ROWS - guesses + 1) * 20)
 }
 
 // ── Player identity ─────────────────────────────────────────────────────────
@@ -58,26 +77,64 @@ export function setPlayerName(name: string): void {
 }
 
 // ── Result persistence ──────────────────────────────────────────────────────
-function loadResults(): Record<number, DailyResult> {
+// Results are keyed by `${day}:${game}`, so every game earns points on its own
+// (one result per game per day). Older versions stored one result per day for
+// the 5-letter wordle only; that history is migrated forward on first load.
+function resultKey(day: number, game: string): string { return `${day}:${game}` }
+
+function migrateV1(): Record<string, DailyResult> | null {
+  try {
+    const raw = localStorage.getItem(RESULTS_KEY_V1)
+    if (!raw) return null
+    const old = JSON.parse(raw) as Record<number, { day: number; solved: boolean; guesses: number; points: number; ts: number }>
+    const out: Record<string, DailyResult> = {}
+    for (const v of Object.values(old)) {
+      out[resultKey(v.day, FEATURED_GAME)] = { ...v, game: FEATURED_GAME }
+    }
+    return out
+  } catch { return null }
+}
+
+function loadResults(): Record<string, DailyResult> {
   try {
     const raw = localStorage.getItem(RESULTS_KEY)
-    return raw ? JSON.parse(raw) : {}
+    if (raw) return JSON.parse(raw)
+    // No v2 store yet — migrate any v1 history so streaks/points carry over.
+    const migrated = migrateV1()
+    if (migrated) { saveResults(migrated); return migrated }
+    return {}
   } catch { return {} }
 }
-function saveResults(r: Record<number, DailyResult>): void {
+function saveResults(r: Record<string, DailyResult>): void {
   try { localStorage.setItem(RESULTS_KEY, JSON.stringify(r)) } catch { /* ignore */ }
 }
 
-/** Record a finished daily game (idempotent per day — first result wins). */
-export function recordDaily(day: number, solved: boolean, guesses: number): void {
+/** Record a finished wordle (idempotent per game/day — first result wins). */
+export function recordDaily(day: number, solved: boolean, guesses: number, game = FEATURED_GAME): void {
   const results = loadResults()
-  if (results[day]) return
-  results[day] = { day, solved, guesses, points: pointsFor(solved, guesses), ts: Date.now() }
+  const key = resultKey(day, game)
+  if (results[key]) return
+  results[key] = { day, game, solved, guesses, points: pointsFor(solved, guesses), ts: Date.now() }
   saveResults(results)
 }
 
+/** Record a finished completion game (word search, pair match) for flat points. */
+export function recordCompletion(day: number, game: string, points: number): void {
+  const results = loadResults()
+  const key = resultKey(day, game)
+  if (results[key]) return
+  results[key] = { day, game, solved: true, guesses: 0, points, ts: Date.now() }
+  saveResults(results)
+}
+
+/** All of the player's game results for a given day. */
+export function getPlayerDayResults(day: number): DailyResult[] {
+  return Object.values(loadResults()).filter(r => r.day === day)
+}
+
+/** The featured daily-wordle result for a day (drives the "Leo" board). */
 export function getPlayerResult(day: number): DailyResult | null {
-  return loadResults()[day] ?? null
+  return loadResults()[resultKey(day, FEATURED_GAME)] ?? null
 }
 
 // ── Player stats ────────────────────────────────────────────────────────────
@@ -91,30 +148,30 @@ export interface PlayerStats {
 }
 
 export function getPlayerStats(): PlayerStats {
-  const results = loadResults()
-  const days = Object.keys(results).map(Number).sort((a, b) => a - b)
+  // Every game played (across all wordles + completion games) earns points.
+  const all = Object.values(loadResults())
   let wins = 0, totalPoints = 0
-  for (const d of days) { if (results[d].solved) wins++; totalPoints += results[d].points }
+  for (const r of all) { if (r.solved) wins++; totalPoints += r.points }
 
-  // Streaks count consecutive solved days.
+  // Streaks count consecutive calendar days with at least one solved game.
+  const solvedDays = [...new Set(all.filter(r => r.solved).map(r => r.day))].sort((a, b) => a - b)
+  const solvedSet = new Set(solvedDays)
   let best = 0, run = 0, prev: number | null = null
-  for (const d of days) {
-    const solved = results[d].solved
-    if (solved && prev !== null && d === prev + 1) run++
-    else if (solved) run = 1
-    else run = 0
+  for (const d of solvedDays) {
+    if (prev !== null && d === prev + 1) run++
+    else run = 1
     if (run > best) best = run
     prev = d
   }
   // Current streak: consecutive solved days ending at today (or yesterday).
   const today = getDayIndex()
-  let current = 0, cursor = results[today] ? today : today - 1
-  while (results[cursor]?.solved) { current++; cursor-- }
+  let current = 0, cursor = solvedSet.has(today) ? today : today - 1
+  while (solvedSet.has(cursor)) { current++; cursor-- }
 
   return {
-    played: days.length,
+    played: all.length,
     wins,
-    winRate: days.length ? Math.round((wins / days.length) * 100) : 0,
+    winRate: all.length ? Math.round((wins / all.length) * 100) : 0,
     totalPoints,
     currentStreak: current,
     bestStreak: best,
@@ -148,7 +205,7 @@ function rng(seed: number): number {
 function botDay(bot: Bot, day: number): { solved: boolean; guesses: number; points: number } {
   const r = rng(bot.seed ^ (day * 2654435761))
   const solved = r < bot.skill
-  if (!solved) return { solved: false, guesses: MAX_ROWS, points: 0 }
+  if (!solved) return { solved: false, guesses: MAX_ROWS, points: pointsFor(false, MAX_ROWS) }
   // Skilled players skew toward fewer guesses.
   const r2 = rng(bot.seed * 3 + day)
   const spread = r2 * (1 - bot.skill * 0.6)
@@ -215,20 +272,21 @@ function getSimulatedAllTime(): { rows: LeaderRow[]; playerRank: number | null }
 }
 
 // ── Shared backend (Supabase) ────────────────────────────────────────────────
-interface ScoreRow { client_id: string; name: string; points: number; solved: boolean; guesses: number }
+interface ScoreRow { client_id: string; name: string; game: string; points: number; solved: boolean; guesses: number }
 
-/** Submit the player's finished daily result to the shared board (idempotent). */
+/** Submit all of the player's finished results for a day (idempotent per game). */
 export async function submitDaily(day: number): Promise<void> {
   if (!hasBackend || !supabase) return
-  const pr = getPlayerResult(day)
-  if (!pr) return
+  const results = getPlayerDayResults(day)
+  if (results.length === 0) return
   const name = getPlayerName() || 'Anonymous'
-  // First result per device/day wins — ignore the conflict on re-submit.
+  const client_id = identityId()
+  // First result per device/day/game wins — ignore conflicts on re-submit.
   const { error } = await supabase
     .from('scores')
     .upsert(
-      { client_id: identityId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points },
-      { onConflict: 'client_id,day', ignoreDuplicates: true },
+      results.map(r => ({ client_id, name, day, game: r.game, solved: r.solved, guesses: r.guesses, points: r.points })),
+      { onConflict: 'client_id,day,game', ignoreDuplicates: true },
     )
   if (error) console.warn('submitDaily failed:', error.message)
 }
@@ -244,10 +302,12 @@ export async function getDailyBoard(day: number): Promise<{ rows: LeaderRow[]; p
   if (!hasBackend || !supabase) return getSimulatedDaily(day)
 
   const me = identityId()
+  // The "Leo" board is head-to-head on the featured daily wordle only.
   const { data, error } = await supabase
     .from('scores')
     .select('client_id,name,points,solved,guesses')
     .eq('day', day)
+    .eq('game', FEATURED_GAME)
     .order('points', { ascending: false })
   if (error) { console.warn('getDailyBoard failed:', error.message); return getSimulatedDaily(day) }
 

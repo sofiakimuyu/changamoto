@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { VOCAB_CATEGORIES } from '../data/vocab-categories'
 import { generateWordSearch, getCellsBetween, seededShuffle } from '../lib/wordsearch'
 import { getDayIndex } from '../lib/wordle'
+import { recordCompletion, submitDaily, WORDSEARCH_GAME, WORDSEARCH_POINTS } from '../lib/leaderboard'
 import WinSheet from './WinSheet'
 
 const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
@@ -48,7 +49,17 @@ export default function WordSearch() {
   const isCellFound = (r: number, c: number) => wsFoundCells.some(([rr, cc]) => rr === r && cc === c)
   const isCellWrong = (r: number, c: number) => wsWrongCells.some(([rr, cc]) => rr === r && cc === c)
   const isCellFirst = (r: number, c: number) => !!wsFirst && wsFirst[0] === r && wsFirst[1] === c
-  const allFound = wsFound.length === wsWordList.length
+  const allFound = wsWordList.length > 0 && wsFound.length === wsWordList.length
+
+  // Award daily points once for finishing the whole grid.
+  const scored = useRef(false)
+  useEffect(() => {
+    if (allFound && !scored.current) {
+      scored.current = true
+      recordCompletion(dayIdx, WORDSEARCH_GAME, WORDSEARCH_POINTS)
+      submitDaily(dayIdx)
+    }
+  }, [allFound, dayIdx])
 
   return (
     <div className="px-3 pb-10 max-w-lg mx-auto">
