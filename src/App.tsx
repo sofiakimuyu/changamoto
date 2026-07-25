@@ -1,17 +1,21 @@
+import { useEffect } from 'react'
 import { useHashRoute } from './lib/router'
 import Nav from './components/Nav'
 import Home from './pages/Home'
 import MoreGames from './pages/MoreGames'
 import LeaderboardPage from './pages/LeaderboardPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import WordlePage from './pages/WordlePage'
 import WordSearch from './components/WordSearch'
 import PairMatch from './components/PairMatch'
 import { WordLength, SUPPORTED_LENGTHS } from './lib/wordleConfig'
+import { initAnalytics, trackPageView } from './lib/analytics'
 
 function renderRoute(route: string) {
   if (route === '/' || route === '') return <Home />
   if (route === '/games') return <MoreGames />
   if (route === '/leaderboard') return <LeaderboardPage />
+  if (route === '/analytics') return <AnalyticsPage />
   if (route === '/wordsearch') return <WordSearch />
   if (route === '/pairmatch') return <PairMatch />
 
@@ -25,6 +29,11 @@ function renderRoute(route: string) {
 
 export default function App() {
   const [route] = useHashRoute()
+
+  // Open a session on first load, then log a page view on every route change.
+  useEffect(() => { initAnalytics(route) }, [])
+  useEffect(() => { trackPageView(route) }, [route])
+
   return (
     <div className="min-h-screen bg-sand-100">
       <Nav />

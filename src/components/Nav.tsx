@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trophy, BookOpen, Flag, Grid3x3, X } from 'lucide-react'
+import { Trophy, BookOpen, Flag, Grid3x3, BarChart3, X } from 'lucide-react'
 import { navigate } from '../lib/router'
 
 // Where "Report issue" points. A GitHub issue is the simplest durable channel
@@ -30,6 +30,7 @@ export default function Nav() {
           <nav className="flex items-center gap-0.5">
             <NavButton onClick={() => navigate('/games')} icon={<Grid3x3 className="w-4 h-4"/>} label="Michezo zaidi" />
             <NavButton onClick={() => navigate('/leaderboard')} icon={<Trophy className="w-4 h-4"/>} label="Viongozi" />
+            <NavButton onClick={() => navigate('/analytics')} icon={<BarChart3 className="w-4 h-4"/>} label="Takwimu" />
             <NavButton onClick={() => setShowRules(true)} icon={<BookOpen className="w-4 h-4"/>} label="Jinsi ya kucheza" />
             <a href={REPORT_URL} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-2 rounded-full text-umber-600 hover:bg-sand-200 active:scale-95 transition-all text-sm font-semibold">
