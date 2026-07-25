@@ -77,6 +77,42 @@ To enable it, in the Supabase dashboard under **Authentication**:
 
 No schema change is needed — signed-in scores use the same `scores` table.
 
+## Usage analytics
+
+A privacy-light analytics backend tracks **how many people use the game and how
+often**, surfaced on the in-app **Takwimu** dashboard (`#/analytics`). It reuses
+the same Supabase project as the leaderboard and is entirely optional — with no
+backend configured, nothing is collected and the dashboard shows a setup note.
+
+What's tracked (all anonymous, no personal data):
+
+- **`session_start`** — a new visit (a fresh session after ~30 min idle).
+- **`page_view`** — each route the player opens.
+- **`game_start` / `game_complete`** — a game opened / finished, with outcome
+  (`solved`, `guesses`) in `props`.
+
+Events tie to a stable per-device `client_id` (a "user") and a rotating
+`session_id` (a "visit"), so the dashboard can report:
+
+- Lifetime **users**, **sessions**, **plays**, and total events.
+- **Active users** over 1 / 7 / 30 days.
+- A **daily trend** of active users and plays.
+- **Per-game popularity** with completion rates.
+- **Returning-player** engagement (how many distinct days each device plays).
+
+### Set up analytics
+
+1. With the shared backend configured (above), in **SQL Editor → New query**
+   paste [`supabase/analytics.sql`](supabase/analytics.sql) and **Run**. This
+   creates the append-only `events` table (public read, append-only insert via
+   RLS) and the `analytics_overview` / `analytics_daily` / `analytics_games` /
+   `analytics_retention` aggregate views the dashboard reads.
+2. That's it — the client logs events automatically. Open `#/analytics` to view
+   the dashboard.
+
+Like the leaderboard, the anon key is safe in the client: RLS keeps `events`
+read-only and append-only, and only non-personal usage data is written.
+
 ## Develop
 
 ```bash
