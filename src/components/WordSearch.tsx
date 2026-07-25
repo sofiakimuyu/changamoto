@@ -3,7 +3,7 @@ import { Check } from 'lucide-react'
 import { VOCAB_CATEGORIES } from '../data/vocab-categories'
 import { generateWordSearch, getCellsBetween, seededShuffle } from '../lib/wordsearch'
 import { getDayIndex } from '../lib/wordle'
-import Confetti from './Confetti'
+import WinSheet from './WinSheet'
 
 const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
 
@@ -25,6 +25,7 @@ export default function WordSearch() {
   const [wsFound, setWsFound] = useState<string[]>([])
   const [wsFoundCells, setWsFoundCells] = useState<[number, number][]>([])
   const [wsWrongCells, setWsWrongCells] = useState<[number, number][]>([])
+  const [showWin, setShowWin] = useState(true)
 
   const wsTapCell = (r: number, c: number) => {
     if (!wsFirst) { setWsFirst([r, c]); return }
@@ -61,10 +62,15 @@ export default function WordSearch() {
 
       {allFound ? (
         <div className="text-center py-10">
-          <Confetti />
           <div className="text-6xl mb-4">🔤</div>
           <h3 className="text-2xl font-black text-umber-700 mb-2">Umepata maneno yote!</h3>
           <p className="text-umber-400 mb-6">Umeyapata maneno yote!</p>
+          {showWin && (
+            <WinSheet emoji="🔤" title="Umeshinda!"
+              subtitle={`Umepata maneno yote ${wsWordList.length}!`}
+              shareText={`Changamoto · Tafuta Maneno · ${wsWordList.length}/${wsWordList.length}`}
+              onClose={() => setShowWin(false)} />
+          )}
         </div>
       ) : (
         <>
