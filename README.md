@@ -87,11 +87,15 @@ backend configured, nothing is collected and the dashboard shows a setup note.
 The dashboard is a **separate internal page** with its own HTML entry point and
 bundle (`admin.html` / `src/admin.tsx`) — it is not part of the game app, has no
 nav link, and isn't routed to from anywhere in the site. Reach it directly at
-`https://<your-site>/admin.html`.
+`https://<your-site>/admin.html` and enter the passphrase (`changamoto` by
+default — change `DASHBOARD_PASSWORD` in `src/pages/AnalyticsPage.tsx`).
 
-It is also **owner-only**: any player's client can *write* usage events, but
-*reading* the analytics is restricted to accounts on the `analytics_admins`
-allowlist. Sign in on that page with your admin email to view it.
+The passphrase is a **light gate, not real security**: the page is a public
+static file, so anyone who knows the word (or reads the client bundle) can view
+the aggregate stats. What is protected at the database level is the **raw event
+stream** — it has no SELECT policy, so only the non-personal aggregate views are
+ever exposed. Players can *write* events but nobody can read individual rows
+through the API.
 
 What's tracked (all anonymous, no personal data):
 
@@ -113,21 +117,17 @@ Events tie to a stable per-device `client_id` (a "user") and a rotating
 
 1. With the shared backend configured (above), in **SQL Editor → New query**
    paste [`supabase/analytics.sql`](supabase/analytics.sql) and **Run**. This
-   creates the append-only `events` table (append-only insert, admin-only read
-   via RLS), the `analytics_admins` allowlist, the `is_analytics_admin()` helper,
-   and the `security_invoker` aggregate views the dashboard reads.
-2. **Grant yourself access:** Table Editor → `analytics_admins` → **Insert row**
-   → your account email (the one you sign in with). Only listed emails can read
-   analytics.
-3. Ensure **Email** auth is enabled and your site URL is in the Auth **URL
-   Configuration** (same as Accounts above) so the sign-in magic link works.
-4. Open `<your-site>/admin.html`, sign in with your admin email, and view the
-   dashboard. The game logs events automatically for everyone.
+   creates the append-only `events` table (insert-only; no read policy on the raw
+   rows) and the definer aggregate views the dashboard reads
+   (`analytics_overview` / `analytics_daily` / `analytics_games` /
+   `analytics_retention`). Safe to re-run.
+2. Open `<your-site>/admin.html`, enter the passphrase, and view the dashboard.
+   The game logs events automatically for everyone — no player login required.
 
-Privacy model: the anon key is safe in the client — RLS keeps `events`
-append-only and its rows **unreadable** to non-admins. The aggregate views are
-declared `security_invoker`, so they inherit that admin-only read policy; a
-signed-in non-admin (or anonymous visitor) sees no data.
+Privacy model: the anon key is safe in the client — the raw `events` rows have
+no SELECT policy so they can't be read through the API; only the non-personal
+aggregate views (definer, granted to the public key) are exposed. The dashboard
+passphrase is client-side obscurity on top of that.
 
 ## Develop
 
