@@ -39,39 +39,54 @@ function getNoise(c: AudioContext): AudioBuffer {
 export function setMuted(m: boolean) { muted = m }
 export function isMuted() { return muted }
 
-// Small round-robin pools of <audio> elements per clip so rapid, overlapping
-// plays (e.g. a row of tiles flipping in quick succession) don't cut each
-// other off the way a single shared element would.
-function makePool(url: string, size: number, volume: number) {
-  const els: HTMLAudioElement[] = []
-  let i = 0
-  let ready = false
-  const ensure = () => {
-    if (ready || typeof Audio === 'undefined') return
-    for (let n = 0; n < size; n++) {
-      const a = new Audio(url)
-      a.volume = volume
-      a.preload = 'auto'
-      els.push(a)
-    }
-    ready = true
-  }
+// Recorded clips are decoded into AudioBuffers and played through the same
+// AudioContext as the synth cues. That context is resumed on the first
+// keypress (playType), so — unlike an <audio> element, whose .play() gets
+// blocked by autoplay policy when it fires from a setTimeout rather than
+// directly in a gesture handler — buffer playback is reliably unlocked by the
+// time a guess is submitted. Buffer sources also overlap natively, so a row of
+// tiles flipping in quick succession doesn't cut itself off.
+const buffers: Record<string, AudioBuffer | null> = {}
+const loading: Record<string, boolean> = {}
+
+function loadClip(c: AudioContext, url: string) {
+  if (buffers[url] || loading[url]) return
+  loading[url] = true
+  fetch(url)
+    .then(r => r.arrayBuffer())
+    .then(ab => c.decodeAudioData(ab))
+    .then(buf => { buffers[url] = buf })
+    .catch(() => { loading[url] = false })
+}
+
+function makeClip(url: string, volume: number) {
   return () => {
     if (muted) return
-    ensure()
-    if (!els.length) return
-    const a = els[i]
-    i = (i + 1) % els.length
-    try { a.currentTime = 0; a.play().catch(() => {}) } catch { /* ignore */ }
+    const c = getCtx(); if (!c) return
+    const buf = buffers[url]
+    if (!buf) { loadClip(c, url); return } // kick off load; plays on next call
+    const src = c.createBufferSource(); src.buffer = buf
+    const g = c.createGain(); g.gain.value = volume
+    src.connect(g); g.connect(c.destination)
+    src.start()
   }
 }
 
-// One flip clip per tile can fire in quick succession; the win clip plays once.
-const playFlipClip = makePool(flipUrl, 6, 0.7)
-const playWinClip = makePool(winUrl, 2, 0.8)
+const playFlipClip = makeClip(flipUrl, 0.7)
+const playWinClip = makeClip(winUrl, 0.8)
 
-/** Soft, short key-click for typing a letter. */
+// Warm the decode cache as soon as the audio context exists (first keypress),
+// so the very first flip/win has its buffer ready rather than being skipped.
+export function preloadClips() {
+  const c = getCtx(); if (!c) return
+  loadClip(c, flipUrl)
+  loadClip(c, winUrl)
+}
+
+/** Soft, short key-click for typing a letter. Also warms the recorded-clip
+ *  decode cache on the first gesture so the first flip/win isn't skipped. */
 export function playType() {
+  preloadClips()
   if (muted) return
   const c = getCtx(); if (!c) return
   const t = c.currentTime
