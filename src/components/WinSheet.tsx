@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Share2, Grid3x3, Trophy } from 'lucide-react'
 import { navigate } from '../lib/router'
 import { useAuth } from '../lib/auth'
+import { playWin } from '../lib/sound'
 import Confetti from './Confetti'
 import SignUpModal from './SignUpModal'
 
@@ -20,6 +21,10 @@ export default function WinSheet({ emoji, title, subtitle, shareText, onClose }:
   const { user } = useAuth()
   const [showSignup, setShowSignup] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+
+  // The sheet only mounts once a game is won, so play the win cue on mount.
+  // Wordle has its own result sheet and triggers the cue separately.
+  useEffect(() => { playWin() }, [])
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 1400) }
 

@@ -117,11 +117,11 @@ export default function Wordle({ config, ranked = false }: Props) {
     setGuesses(newGuesses)
     setRevealRow(newGuesses.length - 1)
     setStatus(newStatus)
-    // Paper rustle for each tile, timed to its flip (matches the c*0.12s stagger).
+    // Card-flip sound for each tile, timed to its flip (matches the c*0.12s stagger).
     for (let c = 0; c < WORD_LEN; c++) setTimeout(playFlip, c * 120)
     saveGame(WORD_LEN, { day, guesses: newGuesses, status: newStatus })
 
-    // Celebration fanfare right after the last tile lands.
+    // Win sound right after the last tile lands.
     if (won) setTimeout(playWin, WORD_LEN * 120 + 220)
     if (newStatus !== 'playing') setTimeout(() => setShowResult(true), 1600)
   }, [status, guesses, answer.word, day, config, WORD_LEN, toast])

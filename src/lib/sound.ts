@@ -1,9 +1,14 @@
-// Tiny Web Audio sound engine — no audio files, so nothing extra to host or
-// fetch. Two cues: a soft key-click when a letter is typed, and a short
-// paper-rustle when a tile flips. Sounds are synthesized from filtered noise.
+// Sound engine. The key-click cue is synthesized from filtered noise (Web
+// Audio), while the tile-flip and win cues play the real recorded clips that
+// ship with the app (cardflipsound.mp3 / correctsoundeffect2.mp3).
 //
-// Browsers only allow audio after a user gesture; since both cues are triggered
-// by typing/clicking, the context resumes on that same gesture.
+// Browsers only allow audio after a user gesture; since every cue is triggered
+// by typing/clicking, playback is unlocked on that same gesture.
+
+// Vite resolves and fingerprints these into the build (and rewrites the URL to
+// honour the `base` path), so they work both in dev and on GitHub Pages.
+import flipUrl from '../../cardflipsound.mp3'
+import winUrl from '../../correctsoundeffect2.mp3'
 
 let ctx: AudioContext | null = null
 let noiseBuffer: AudioBuffer | null = null
@@ -34,6 +39,37 @@ function getNoise(c: AudioContext): AudioBuffer {
 export function setMuted(m: boolean) { muted = m }
 export function isMuted() { return muted }
 
+// Small round-robin pools of <audio> elements per clip so rapid, overlapping
+// plays (e.g. a row of tiles flipping in quick succession) don't cut each
+// other off the way a single shared element would.
+function makePool(url: string, size: number, volume: number) {
+  const els: HTMLAudioElement[] = []
+  let i = 0
+  let ready = false
+  const ensure = () => {
+    if (ready || typeof Audio === 'undefined') return
+    for (let n = 0; n < size; n++) {
+      const a = new Audio(url)
+      a.volume = volume
+      a.preload = 'auto'
+      els.push(a)
+    }
+    ready = true
+  }
+  return () => {
+    if (muted) return
+    ensure()
+    if (!els.length) return
+    const a = els[i]
+    i = (i + 1) % els.length
+    try { a.currentTime = 0; a.play().catch(() => {}) } catch { /* ignore */ }
+  }
+}
+
+// One flip clip per tile can fire in quick succession; the win clip plays once.
+const playFlipClip = makePool(flipUrl, 6, 0.7)
+const playWinClip = makePool(winUrl, 2, 0.8)
+
 /** Soft, short key-click for typing a letter. */
 export function playType() {
   if (muted) return
@@ -51,59 +87,14 @@ export function playType() {
   src.start(t); src.stop(t + 0.06)
 }
 
-/** Short paper-rustle for a tile flipping over. Slightly randomized each call
- *  so a row of flips sounds like riffled paper rather than a repeated tone. */
+/** Card-flip sound for a tile flipping over. Plays the recorded flip clip;
+ *  called once per tile as a guess row reveals. */
 export function playFlip() {
-  if (muted) return
-  const c = getCtx(); if (!c) return
-  const t = c.currentTime
-  const src = c.createBufferSource(); src.buffer = getNoise(c)
-  src.playbackRate.value = 0.85 + Math.random() * 0.4
-  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 700
-  const bp = c.createBiquadFilter(); bp.type = 'bandpass'
-  bp.frequency.value = 1500 + Math.random() * 1300; bp.Q.value = 0.6
-  const g = c.createGain()
-  const dur = 0.12 + Math.random() * 0.05
-  g.gain.setValueAtTime(0.0001, t)
-  g.gain.exponentialRampToValueAtTime(0.13, t + 0.006)
-  // Two-stage decay gives a soft "crinkle" tail rather than a clean beep.
-  g.gain.exponentialRampToValueAtTime(0.04, t + dur * 0.5)
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-  src.connect(hp); hp.connect(bp); bp.connect(g); g.connect(c.destination)
-  src.start(t); src.stop(t + dur + 0.02)
+  playFlipClip()
 }
 
-/** Triumphant little fanfare when the word is solved. Ascending arpeggio with
- *  a soft bell timbre, plus a sparkle tail. */
+/** Win cue — the recorded "correct" sound — played when a game is solved
+ *  (Wordle, Word Search, Pair Match, …). */
 export function playWin() {
-  if (muted) return
-  const c = getCtx(); if (!c) return
-  const t0 = c.currentTime
-  // C5, E5, G5, C6 — a bright major arpeggio.
-  const notes = [523.25, 659.25, 783.99, 1046.5]
-  notes.forEach((freq, i) => {
-    const t = t0 + i * 0.1
-    const osc = c.createOscillator(); osc.type = 'triangle'; osc.frequency.value = freq
-    const osc2 = c.createOscillator(); osc2.type = 'sine'; osc2.frequency.value = freq * 2
-    const g = c.createGain()
-    g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(0.22, t + 0.02)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45)
-    const g2 = c.createGain(); g2.gain.value = 0.25
-    osc.connect(g); osc2.connect(g2); g2.connect(g); g.connect(c.destination)
-    osc.start(t); osc.stop(t + 0.5)
-    osc2.start(t); osc2.stop(t + 0.5)
-  })
-  // Sparkle: a few quick high blips after the arpeggio lands.
-  for (let i = 0; i < 5; i++) {
-    const t = t0 + 0.42 + i * 0.05
-    const osc = c.createOscillator(); osc.type = 'sine'
-    osc.frequency.value = 1400 + Math.random() * 1600
-    const g = c.createGain()
-    g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(0.1, t + 0.01)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12)
-    osc.connect(g); g.connect(c.destination)
-    osc.start(t); osc.stop(t + 0.14)
-  }
+  playWinClip()
 }
