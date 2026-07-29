@@ -12,7 +12,7 @@ export default function Home() {
         <h1 className="text-2xl font-black text-umber-700 leading-tight">Neno la Leo</h1>
         <p className="text-umber-400 text-xs">Neno la siku · #{dayNumber > 0 ? dayNumber : 1}</p>
       </div>
-      <Wordle config={config} ranked />
+      <Wordle config={config} />
     </div>
   )
 }

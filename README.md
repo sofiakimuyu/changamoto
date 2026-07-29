@@ -14,7 +14,8 @@ Wordle challenge in the Hekima app.
   - **Tafuta Maneno** — a daily word search.
   - **Oanisha Maneno** — a Swahili↔English pair-matching game.
 - **Leaderboard** — ranks you for the individual day and the running all-time
-  season, with points, win-rate and streaks.
+  season, with points, win-rate and streaks. Every game above scores (see
+  [Leaderboard](#leaderboard)).
 
 ## Word data
 
@@ -32,9 +33,22 @@ Both the guess lists (`src/data/wordlists/guesses-*.json`) and answer pools
 
 ## Leaderboard
 
-The leaderboard ranks the classic daily 5-letter game for the individual day and
-the all-time season. It has two modes, chosen automatically by whether Supabase
-credentials are present:
+**Every daily game scores.** Each one can be played for points once per day
+(first finish wins, so a replay can't re-score it), and your standing for a day
+is the sum of that day's games.
+
+| Game | Points |
+| --- | --- |
+| Neno la Leo and the 3/4/6-letter variants | `max(20, (6 − guesses + 1) × 20)` → 120 for a first-guess solve down to 20; a loss scores 0 |
+| Tafuta Maneno | By solve time: 150 under 1 min, then 125 / 100 / 80 / 60 / 40 / 30 / 20 at each further minute, 10 for any finish |
+| Oanisha Maneno | 100 less 15 per wrong pairing, floor 25 |
+
+The formulas live in `src/lib/leaderboard.ts` and are **repeated as CHECK
+constraints** in [`supabase/schema.sql`](supabase/schema.sql) so a tampered
+client can't inflate a score — change one and you must change the other.
+
+The board ranks you for the individual day and the all-time season. It has two
+modes, chosen automatically by whether Supabase credentials are present:
 
 - **Shared backend (Supabase)** — real cross-player rankings from a shared
   `scores` table. Players are anonymous: each device gets a random id and picks a
@@ -51,6 +65,8 @@ Your own results are always saved locally too, for instant stats and offline pla
 2. In the dashboard: **SQL Editor → New query**, paste [`supabase/schema.sql`](supabase/schema.sql), and **Run**.
    This creates the `scores` table, Row Level Security policies (public read,
    append-only insert with integrity checks), and the `alltime_leaderboard` view.
+   It is safe to re-run, and migrates an existing single-game `scores` table in
+   place (adding the `game` column and backfilling old rows as `wordle-5`).
 3. Copy `.env.example` to `.env.local` and fill in your **Project URL** and
    **anon / public key** (Project Settings → API).
 4. `npm run dev` (or rebuild for prod). The app now reads/writes the shared board.
@@ -80,8 +96,9 @@ No schema change is needed — signed-in scores use the same `scores` table.
 ### Troubleshooting: the board says "Bado hakuna alama"
 
 That message means the shared board came back with **zero rows**. Your own
-finished game is always merged in locally, so if you see it right after playing,
-scores are not reaching the `scores` table at all. Work through this in order:
+finished games are always merged in locally, so if you see it right after
+playing, scores are not reaching the `scores` table at all. Work through this in
+order:
 
 1. **Is the backend actually configured in the deployed build?** The GitHub Pages
    workflow injects `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from repo

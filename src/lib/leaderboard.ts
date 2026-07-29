@@ -1,5 +1,15 @@
-// Leaderboard for the classic daily Wordle (Neno la Leo). It ranks the player
-// for the individual day and for the running all-time season.
+// Leaderboard across every daily game. It ranks the player for the individual
+// day and for the running all-time season.
+//
+// ── What counts ────────────────────────────────────────────────────────────
+// Every daily game earns points: the four Neno la Leo Wordle variants, Tafuta
+// Maneno and Oanisha Maneno. Each game can be scored once per day (first finish
+// wins), and a day's standing is the sum of that day's games.
+//
+// The point formulas live here rather than in the game components, because the
+// database repeats them as CHECK constraints (see supabase/schema.sql) so a
+// tampered client can't inflate a score. The two must agree — change one and
+// you must change the other.
 //
 // ── Backend vs. fallback ───────────────────────────────────────────────────
 // When Supabase is configured (VITE_SUPABASE_URL/ANON_KEY set) the board shows
@@ -8,22 +18,65 @@
 // SIMULATED community so the UI still has something to render. The player's own
 // results are always saved locally too, for instant stats and offline play.
 //
-// The UI consumes only `getDailyBoard` / `getAllTimeBoard` (async) and
-// `submitDaily`, so the storage backing them can change without touching pages.
+// The UI consumes only `getDailyBoard` / `getAllTimeBoard` (async),
+// `recordResult` and `syncPendingResults`, so the storage backing them can
+// change without touching pages.
 
 import { MAX_ROWS, getDayIndex } from './wordle'
 import { supabase, hasBackend, identityId, identityIds, identityReady } from './supabase'
 
 const NAME_KEY = 'changamoto_player_name'
-const RESULTS_KEY = 'changamoto_daily_results_v1'
+const RESULTS_KEY = 'changamoto_daily_results_v2'
+// v1 held only the 5-letter game, keyed by day alone.
+const LEGACY_RESULTS_KEY = 'changamoto_daily_results_v1'
 
 // First day the all-time season counts from (the app's launch day index).
 export const LAUNCH_DAY = 20658 // 2026-07-24
 
-export interface DailyResult {
+// ── Games ───────────────────────────────────────────────────────────────────
+export type GameId = 'wordle-3' | 'wordle-4' | 'wordle-5' | 'wordle-6' | 'wordsearch' | 'pairmatch'
+
+export const GAME_IDS: GameId[] = ['wordle-3', 'wordle-4', 'wordle-5', 'wordle-6', 'wordsearch', 'pairmatch']
+
+export function wordleGameId(length: number): GameId { return `wordle-${length}` as GameId }
+
+// ── Scoring ─────────────────────────────────────────────────────────────────
+/** Wordle, any length: fewer guesses → more points; a loss = 0. */
+export function pointsForWordle(solved: boolean, guesses: number): number {
+  if (!solved) return 0
+  return Math.max(20, (MAX_ROWS - guesses + 1) * 20) // 1 guess→120 … 6 guesses→20
+}
+
+// Upper bounds in seconds; the first tier the solve time falls under wins.
+const WORD_SEARCH_TIERS: [maxSeconds: number, points: number][] = [
+  [60, 150], [120, 125], [180, 100], [240, 80],
+  [300, 60], [360, 40], [420, 30], [480, 20],
+]
+/** Tafuta Maneno: the faster the grid is cleared, the more points. */
+export function pointsForWordSearch(seconds: number): number {
+  for (const [max, points] of WORD_SEARCH_TIERS) if (seconds < max) return points
+  return 10 // any finish is worth something
+}
+
+/** Oanisha Maneno: a clean run is worth most, each wrong pairing costs. */
+export function pointsForPairMatch(mistakes: number): number {
+  return Math.max(25, 100 - mistakes * 15) // perfect→100 … 5+ mistakes→25
+}
+
+// ── Player identity ─────────────────────────────────────────────────────────
+export function getPlayerName(): string {
+  try { return localStorage.getItem(NAME_KEY) || '' } catch { return '' }
+}
+export function setPlayerName(name: string): void {
+  try { localStorage.setItem(NAME_KEY, name.trim().slice(0, 20)) } catch { /* ignore */ }
+}
+
+// ── Result persistence ──────────────────────────────────────────────────────
+export interface GameResult {
+  game: GameId
   day: number
   solved: boolean
-  guesses: number // number of guesses used (rows played)
+  guesses: number | null // Wordle only; null for the other games
   points: number
   ts: number
   /** True once this result is known to exist on the shared board. Results saved
@@ -32,10 +85,129 @@ export interface DailyResult {
   published?: boolean
 }
 
+function resultKey(day: number, game: GameId): string { return `${day}:${game}` }
+
+/** Carry v1 results (5-letter game only, keyed by day) over to the v2 shape. */
+function migrateLegacyResults(): Record<string, GameResult> {
+  const out: Record<string, GameResult> = {}
+  try {
+    const raw = localStorage.getItem(LEGACY_RESULTS_KEY)
+    if (!raw) return out
+    const legacy = JSON.parse(raw) as Record<string, Partial<GameResult>>
+    for (const r of Object.values(legacy)) {
+      if (typeof r?.day !== 'number') continue
+      out[resultKey(r.day, 'wordle-5')] = {
+        game: 'wordle-5',
+        day: r.day,
+        solved: !!r.solved,
+        guesses: r.guesses ?? null,
+        points: r.points ?? 0,
+        ts: r.ts ?? Date.now(),
+        published: r.published,
+      }
+    }
+    localStorage.setItem(RESULTS_KEY, JSON.stringify(out))
+  } catch { /* ignore */ }
+  return out
+}
+
+function loadResults(): Record<string, GameResult> {
+  try {
+    const raw = localStorage.getItem(RESULTS_KEY)
+    return raw ? JSON.parse(raw) : migrateLegacyResults()
+  } catch { return {} }
+}
+function saveResults(r: Record<string, GameResult>): void {
+  try { localStorage.setItem(RESULTS_KEY, JSON.stringify(r)) } catch { /* ignore */ }
+}
+
+/**
+ * Record a finished game (idempotent per game per day — first result wins,
+ * which is also what stops a replay from farming points).
+ */
+export function recordResult(
+  game: GameId, day: number, solved: boolean, guesses: number | null, points: number,
+): void {
+  const results = loadResults()
+  const key = resultKey(day, game)
+  if (results[key]) return
+  results[key] = { game, day, solved, guesses, points, ts: Date.now() }
+  saveResults(results)
+}
+
+export function getPlayerResult(day: number, game: GameId): GameResult | null {
+  return loadResults()[resultKey(day, game)] ?? null
+}
+
+/** Remember that a result made it onto the shared board. */
+function markPublished(day: number, game: GameId): void {
+  const results = loadResults()
+  const key = resultKey(day, game)
+  if (!results[key] || results[key].published) return
+  results[key] = { ...results[key], published: true }
+  saveResults(results)
+}
+
+// ── Player stats ────────────────────────────────────────────────────────────
+export interface PlayerStats {
+  played: number
+  wins: number
+  winRate: number
+  totalPoints: number
+  currentStreak: number
+  bestStreak: number
+}
+
+/** Totals for one day across every game the player finished that day. */
+function playerDayTotals(day: number): { played: number; wins: number; points: number } {
+  let played = 0, wins = 0, points = 0
+  for (const r of Object.values(loadResults())) {
+    if (r.day !== day) continue
+    played++
+    if (r.solved) wins++
+    points += r.points
+  }
+  return { played, wins, points }
+}
+
+export function getPlayerStats(): PlayerStats {
+  const results = Object.values(loadResults())
+  let wins = 0, totalPoints = 0
+  // A day counts toward a streak if at least one game was solved on it.
+  const solvedDays = new Set<number>()
+  for (const r of results) {
+    totalPoints += r.points
+    if (r.solved) { wins++; solvedDays.add(r.day) }
+  }
+
+  const solved = [...solvedDays].sort((a, b) => a - b)
+  let best = 0, run = 0, prev: number | null = null
+  for (const d of solved) {
+    run = prev !== null && d === prev + 1 ? run + 1 : 1
+    if (run > best) best = run
+    prev = d
+  }
+
+  // Current streak: consecutive solved days ending at today (or yesterday).
+  const today = getDayIndex()
+  let current = 0, cursor = solvedDays.has(today) ? today : today - 1
+  while (solvedDays.has(cursor)) { current++; cursor-- }
+
+  return {
+    played: results.length,
+    wins,
+    winRate: results.length ? Math.round((wins / results.length) * 100) : 0,
+    totalPoints,
+    currentStreak: current,
+    bestStreak: best,
+  }
+}
+
+// ── Board rows ──────────────────────────────────────────────────────────────
 export interface LeaderRow {
   name: string
   points: number
-  detail: string   // e.g. "3/6" for a day, or "12 played · 78% win" all-time
+  detail: string   // e.g. "michezo 3 · ushindi 2"
   isPlayer: boolean
 }
 
@@ -50,96 +222,17 @@ export interface Board {
   error: string | null
 }
 
-// ── Scoring ───────────────────────────────────────────────────────────────
-/** Points for a finished daily game. Fewer guesses → more points; a loss = 0. */
-export function pointsFor(solved: boolean, guesses: number): number {
-  if (!solved) return 0
-  return Math.max(20, (MAX_ROWS - guesses + 1) * 20) // 1 guess→120 … 6 guesses→20
+function dayDetail(played: number, wins: number): string {
+  return `michezo ${played} · ushindi ${wins}`
 }
-
-// ── Player identity ─────────────────────────────────────────────────────────
-export function getPlayerName(): string {
-  try { return localStorage.getItem(NAME_KEY) || '' } catch { return '' }
-}
-export function setPlayerName(name: string): void {
-  try { localStorage.setItem(NAME_KEY, name.trim().slice(0, 20)) } catch { /* ignore */ }
-}
-
-// ── Result persistence ──────────────────────────────────────────────────────
-function loadResults(): Record<number, DailyResult> {
-  try {
-    const raw = localStorage.getItem(RESULTS_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
-}
-function saveResults(r: Record<number, DailyResult>): void {
-  try { localStorage.setItem(RESULTS_KEY, JSON.stringify(r)) } catch { /* ignore */ }
-}
-
-/** Record a finished daily game (idempotent per day — first result wins). */
-export function recordDaily(day: number, solved: boolean, guesses: number): void {
-  const results = loadResults()
-  if (results[day]) return
-  results[day] = { day, solved, guesses, points: pointsFor(solved, guesses), ts: Date.now() }
-  saveResults(results)
-}
-
-/** Remember that a day's result made it onto the shared board. */
-function markPublished(day: number): void {
-  const results = loadResults()
-  if (!results[day] || results[day].published) return
-  results[day] = { ...results[day], published: true }
-  saveResults(results)
-}
-
-export function getPlayerResult(day: number): DailyResult | null {
-  return loadResults()[day] ?? null
-}
-
-// ── Player stats ────────────────────────────────────────────────────────────
-export interface PlayerStats {
-  played: number
-  wins: number
-  winRate: number
-  totalPoints: number
-  currentStreak: number
-  bestStreak: number
-}
-
-export function getPlayerStats(): PlayerStats {
-  const results = loadResults()
-  const days = Object.keys(results).map(Number).sort((a, b) => a - b)
-  let wins = 0, totalPoints = 0
-  for (const d of days) { if (results[d].solved) wins++; totalPoints += results[d].points }
-
-  // Streaks count consecutive solved days.
-  let best = 0, run = 0, prev: number | null = null
-  for (const d of days) {
-    const solved = results[d].solved
-    if (solved && prev !== null && d === prev + 1) run++
-    else if (solved) run = 1
-    else run = 0
-    if (run > best) best = run
-    prev = d
-  }
-  // Current streak: consecutive solved days ending at today (or yesterday).
-  const today = getDayIndex()
-  let current = 0, cursor = results[today] ? today : today - 1
-  while (results[cursor]?.solved) { current++; cursor-- }
-
-  return {
-    played: days.length,
-    wins,
-    winRate: days.length ? Math.round((wins / days.length) * 100) : 0,
-    totalPoints,
-    currentStreak: current,
-    bestStreak: best,
-  }
+function seasonDetail(played: number, wins: number): string {
+  const rate = played ? Math.round((wins / played) * 100) : 0
+  return `michezo ${played} · ushindi ${rate}%`
 }
 
 // ── Simulated community ──────────────────────────────────────────────────────
 // A fixed roster of players with a per-player skill (0..1). Their daily results
-// are derived deterministically from (day, seed) so the board is stable.
+// are derived deterministically from (day, game, seed) so the board is stable.
 interface Bot { name: string; seed: number; skill: number }
 
 const BOT_NAMES = [
@@ -160,16 +253,42 @@ function rng(seed: number): number {
   return Math.abs(s) / 0x7fffffff
 }
 
-/** A bot's simulated result for one day: guesses + points. */
-function botDay(bot: Bot, day: number): { solved: boolean; guesses: number; points: number } {
-  const r = rng(bot.seed ^ (day * 2654435761))
-  const solved = r < bot.skill
-  if (!solved) return { solved: false, guesses: MAX_ROWS, points: 0 }
+function gameSeed(bot: Bot, day: number, game: GameId): number {
+  let h = 0
+  for (let i = 0; i < game.length; i++) h = (h * 31 + game.charCodeAt(i)) & 0xffffffff
+  return bot.seed ^ (day * 2654435761) ^ h
+}
+
+/** A bot's simulated result for one game on one day. */
+function botGame(bot: Bot, day: number, game: GameId): { solved: boolean; points: number } {
+  const seed = gameSeed(bot, day, game)
+  if (rng(seed * 7) > 0.45 + bot.skill * 0.4) return { solved: false, points: -1 } // didn't play
+  if (rng(seed) >= bot.skill) return { solved: false, points: 0 }
+
+  if (game === 'wordsearch') {
+    const tiers = [10, 20, 30, 40, 60, 80, 100, 125, 150]
+    const i = Math.min(tiers.length - 1, Math.floor(rng(seed * 3) * (2 + bot.skill * 8)))
+    return { solved: true, points: tiers[i] }
+  }
+  if (game === 'pairmatch') {
+    return { solved: true, points: pointsForPairMatch(Math.round(rng(seed * 5) * (1 - bot.skill) * 10)) }
+  }
   // Skilled players skew toward fewer guesses.
-  const r2 = rng(bot.seed * 3 + day)
-  const spread = r2 * (1 - bot.skill * 0.6)
+  const spread = rng(seed * 3) * (1 - bot.skill * 0.6)
   const guesses = Math.min(MAX_ROWS, Math.max(2, Math.round(2 + spread * 5)))
-  return { solved: true, guesses, points: pointsFor(true, guesses) }
+  return { solved: true, points: pointsForWordle(true, guesses) }
+}
+
+function botDay(bot: Bot, day: number): { played: number; wins: number; points: number } {
+  let played = 0, wins = 0, points = 0
+  for (const game of GAME_IDS) {
+    const r = botGame(bot, day, game)
+    if (r.points < 0) continue // skipped this game today
+    played++
+    if (r.solved) wins++
+    points += r.points
+  }
+  return { played, wins, points }
 }
 
 // ── Public: assembled boards ─────────────────────────────────────────────────
@@ -177,61 +296,59 @@ function playerLabel(): string {
   return getPlayerName() || 'You'
 }
 
+function rankRows(rows: LeaderRow[]): { rows: LeaderRow[]; playerRank: number | null } {
+  rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
+  const idx = rows.findIndex(r => r.isPlayer)
+  return { rows, playerRank: idx >= 0 ? idx + 1 : null }
+}
+
 /** Simulated ranked board for a single day (fallback when no backend). */
 function getSimulatedDaily(day: number): { rows: LeaderRow[]; playerRank: number | null } {
   const rows: LeaderRow[] = BOTS.map(b => {
     const d = botDay(b, day)
-    return { name: b.name, points: d.points, detail: d.solved ? `${d.guesses}/${MAX_ROWS}` : 'X/6', isPlayer: false }
+    return { name: b.name, points: d.points, detail: dayDetail(d.played, d.wins), isPlayer: false }
   })
 
-  const pr = getPlayerResult(day)
-  if (pr) {
-    rows.push({
-      name: playerLabel(),
-      points: pr.points,
-      detail: pr.solved ? `${pr.guesses}/${MAX_ROWS}` : 'X/6',
-      isPlayer: true,
-    })
+  const mine = playerDayTotals(day)
+  if (mine.played > 0) {
+    rows.push({ name: playerLabel(), points: mine.points, detail: dayDetail(mine.played, mine.wins), isPlayer: true })
   }
-
-  rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
-  const playerRank = pr ? rows.findIndex(r => r.isPlayer) + 1 : null
-  return { rows, playerRank }
+  return rankRows(rows)
 }
 
 /** Simulated ranked all-time board over the season (fallback when no backend). */
 function getSimulatedAllTime(): { rows: LeaderRow[]; playerRank: number | null } {
   const today = getDayIndex()
   const start = Math.min(LAUNCH_DAY, today)
-  const seasonDays: number[] = []
-  for (let d = start; d <= today; d++) seasonDays.push(d)
 
   const rows: LeaderRow[] = BOTS.map(b => {
     let points = 0, played = 0, wins = 0
-    for (const d of seasonDays) {
+    for (let d = start; d <= today; d++) {
       const r = botDay(b, d)
-      points += r.points; played++
-      if (r.solved) wins++
+      points += r.points; played += r.played; wins += r.wins
     }
-    const winRate = played ? Math.round((wins / played) * 100) : 0
-    return { name: b.name, points, detail: `${played} played · ${winRate}% win`, isPlayer: false }
+    return { name: b.name, points, detail: seasonDetail(played, wins), isPlayer: false }
   })
 
   const stats = getPlayerStats()
   rows.push({
     name: playerLabel(),
     points: stats.totalPoints,
-    detail: `${stats.played} played · ${stats.winRate}% win`,
+    detail: seasonDetail(stats.played, stats.wins),
     isPlayer: true,
   })
-
-  rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
-  const playerRank = rows.findIndex(r => r.isPlayer) + 1
-  return { rows, playerRank }
+  return rankRows(rows)
 }
 
 // ── Shared backend (Supabase) ────────────────────────────────────────────────
-interface ScoreRow { client_id: string; name: string; points: number; solved: boolean; guesses: number }
+interface ScoreRow {
+  client_id: string
+  name: string
+  game: GameId
+  points: number
+  solved: boolean
+  guesses: number | null
+}
 
 /** Outcome of publishing to the shared board. `ok` is false only on a real
  *  failure — with no backend configured there is nothing to publish. */
@@ -243,17 +360,17 @@ const NOTHING_TO_DO: SubmitOutcome = { ok: true, error: null }
 const UNIQUE_VIOLATION = '23505'
 
 /**
- * Submit the player's finished daily result to the shared board (idempotent).
+ * Submit one finished game to the shared board (idempotent).
  *
  * A plain INSERT is used rather than an upsert: the board is append-only (the
  * schema grants anon INSERT and SELECT only, with no UPDATE policy), so an
  * upsert's conflict resolution has nothing to fall back on. The unique
- * (client_id, day) constraint gives idempotency for free — a repeat submit
- * comes back as 23505, which means the score is already published.
+ * (client_id, day, game) constraint gives idempotency for free — a repeat
+ * submit comes back as 23505, which means the score is already published.
  */
-export async function submitDaily(day: number): Promise<SubmitOutcome> {
+export async function submitResult(day: number, game: GameId): Promise<SubmitOutcome> {
   if (!hasBackend || !supabase) return NOTHING_TO_DO
-  const pr = getPlayerResult(day)
+  const pr = getPlayerResult(day, game)
   if (!pr) return NOTHING_TO_DO
 
   // Wait for the session so a signed-in player's score is filed under their
@@ -262,53 +379,65 @@ export async function submitDaily(day: number): Promise<SubmitOutcome> {
 
   const name = (getPlayerName() || 'Anonymous').trim().slice(0, 20) || 'Anonymous'
   try {
-    const { error } = await supabase
-      .from('scores')
-      .insert({ client_id: identityId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points })
+    const { error } = await supabase.from('scores').insert({
+      client_id: identityId(), name, day, game,
+      solved: pr.solved, guesses: pr.guesses, points: pr.points,
+    })
     if (!error || error.code === UNIQUE_VIOLATION) {
-      markPublished(day)
+      markPublished(day, game)
       return NOTHING_TO_DO
     }
-    console.warn('submitDaily failed:', error.message, error.details ?? '')
+    console.warn('submitResult failed:', error.message, error.details ?? '')
     return { ok: false, error: error.message }
   } catch (e) {
     // Network failure — the result stays unpublished and is retried later.
     const message = e instanceof Error ? e.message : String(e)
-    console.warn('submitDaily failed:', message)
+    console.warn('submitResult failed:', message)
     return { ok: false, error: message }
   }
 }
 
 /**
- * Re-send every finished day that never reached the shared board.
+ * Re-send every finished game that never reached the shared board.
  *
  * Without this a single failed submit (offline, a transient error, or playing
- * before the backend was reachable) would drop that day for good: nothing else
- * ever retries, so the player finishes a game and never appears on the board.
+ * before the backend was reachable) would drop that result for good: nothing
+ * else ever retries, so the player finishes a game and never appears.
  */
 export async function syncPendingResults(): Promise<SubmitOutcome> {
   if (!hasBackend || !supabase) return NOTHING_TO_DO
   const pending = Object.values(loadResults())
     .filter(r => !r.published)
-    .map(r => r.day)
-    .sort((a, b) => a - b)
+    .sort((a, b) => a.day - b.day)
 
   let error: string | null = null
-  for (const day of pending) {
-    const outcome = await submitDaily(day)
+  for (const r of pending) {
+    const outcome = await submitResult(r.day, r.game)
     if (!outcome.ok) error = outcome.error
   }
   return { ok: error === null, error }
 }
 
-function rankRows(rows: LeaderRow[]): { rows: LeaderRow[]; playerRank: number | null } {
-  rows.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name))
-  const idx = rows.findIndex(r => r.isPlayer)
-  return { rows, playerRank: idx >= 0 ? idx + 1 : null }
-}
+/** Per-player totals assembled from individual game rows. */
+interface Tally { name: string; points: number; played: number; wins: number; isPlayer: boolean }
 
-function dailyDetail(solved: boolean, guesses: number): string {
-  return solved ? `${guesses}/${MAX_ROWS}` : `X/${MAX_ROWS}`
+/** Group rows by player, folding every id this player owns into one entry. */
+function tally(
+  rows: { client_id: string; name: string; points: number; solved: boolean }[],
+  mine: string[],
+): Tally[] {
+  const MINE = ' me'
+  const byPlayer = new Map<string, Tally>()
+  for (const r of rows) {
+    const isPlayer = mine.includes(r.client_id)
+    const key = isPlayer ? MINE : r.client_id
+    const entry = byPlayer.get(key) ?? { name: r.name, points: 0, played: 0, wins: 0, isPlayer }
+    entry.points += r.points
+    entry.played++
+    if (r.solved) entry.wins++
+    byPlayer.set(key, entry)
+  }
+  return [...byPlayer.values()]
 }
 
 /** Real (or simulated) ranked board for a single day. */
@@ -319,35 +448,31 @@ export async function getDailyBoard(day: number): Promise<Board> {
   const mine = identityIds()
   const { data, error } = await supabase
     .from('scores')
-    .select('client_id,name,points,solved,guesses')
+    .select('client_id,name,game,points,solved,guesses')
     .eq('day', day)
-    .order('points', { ascending: false })
   if (error) {
     console.warn('getDailyBoard failed:', error.message)
     return { ...getSimulatedDaily(day), source: 'local', error: error.message }
   }
 
-  const rows: LeaderRow[] = (data as ScoreRow[]).map(r => {
-    const isPlayer = mine.includes(r.client_id)
-    return {
-      name: isPlayer ? (getPlayerName() || r.name) : r.name,
-      points: r.points,
-      detail: dailyDetail(r.solved, r.guesses),
-      isPlayer,
-    }
-  })
+  const rows: LeaderRow[] = tally(data as ScoreRow[], mine).map(t => ({
+    name: t.isPlayer ? (getPlayerName() || t.name) : t.name,
+    points: t.points,
+    detail: dayDetail(t.played, t.wins),
+    isPlayer: t.isPlayer,
+  }))
 
-  // The player's own finished game always shows, even when the shared board has
-  // no row for it yet — first play of the day, a submit that hasn't landed, or
-  // an offline finish. Being told "no scores yet" right after playing is the
+  // The player's own finished games always show, even when the shared board has
+  // no rows for them yet — first play of the day, a submit that hasn't landed,
+  // or an offline finish. Being told "no scores yet" right after playing is the
   // one thing the board must never do.
   if (!rows.some(r => r.isPlayer)) {
-    const pr = getPlayerResult(day)
-    if (pr) {
+    const totals = playerDayTotals(day)
+    if (totals.played > 0) {
       rows.push({
         name: playerLabel(),
-        points: pr.points,
-        detail: dailyDetail(pr.solved, pr.guesses),
+        points: totals.points,
+        detail: dayDetail(totals.played, totals.wins),
         isPlayer: true,
       })
     }
@@ -372,29 +497,31 @@ export async function getAllTimeBoard(): Promise<Board> {
     return { ...getSimulatedAllTime(), source: 'local', error: error.message }
   }
 
-  const rows: LeaderRow[] = (data as AllTimeRow[]).map(r => {
-    const winRate = r.played ? Math.round((r.wins / r.played) * 100) : 0
-    const isPlayer = mine.includes(r.client_id)
-    return {
-      name: isPlayer ? (getPlayerName() || r.name) : r.name,
-      points: r.points,
-      detail: `${r.played} played · ${winRate}% win`,
-      isPlayer,
+  // The view already aggregates per client_id; fold the player's ids together.
+  let me: { name: string; points: number; played: number; wins: number } | null = null
+  const rows: LeaderRow[] = []
+  for (const r of data as AllTimeRow[]) {
+    if (mine.includes(r.client_id)) {
+      me = me
+        ? { name: me.name, points: me.points + r.points, played: me.played + r.played, wins: me.wins + r.wins }
+        : { ...r }
+      continue
     }
-  })
+    rows.push({ name: r.name, points: r.points, detail: seasonDetail(r.played, r.wins), isPlayer: false })
+  }
 
-  // Same guarantee as the daily board: if none of the shared rows are the
-  // player's, fall back to their locally recorded season.
-  if (!rows.some(r => r.isPlayer)) {
-    const stats = getPlayerStats()
-    if (stats.played > 0) {
-      rows.push({
-        name: playerLabel(),
-        points: stats.totalPoints,
-        detail: `${stats.played} played · ${stats.winRate}% win`,
-        isPlayer: true,
-      })
-    }
+  // Same guarantee as the daily board: fall back to the locally recorded season.
+  const stats = getPlayerStats()
+  if (!me && stats.played > 0) {
+    me = { name: playerLabel(), points: stats.totalPoints, played: stats.played, wins: stats.wins }
+  }
+  if (me) {
+    rows.push({
+      name: getPlayerName() || me.name,
+      points: me.points,
+      detail: seasonDetail(me.played, me.wins),
+      isPlayer: true,
+    })
   }
   return { ...rankRows(rows), source: 'shared', error: null }
 }

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Trophy, Pencil, Check, Flame } from 'lucide-react'
 import {
-  getDailyBoard, getAllTimeBoard, submitDaily, syncPendingResults,
+  getDailyBoard, getAllTimeBoard, syncPendingResults,
   getPlayerName, setPlayerName, getPlayerStats, Board, LeaderRow,
 } from '../lib/leaderboard'
 import { hasBackend } from '../lib/supabase'
@@ -88,10 +88,10 @@ export default function LeaderboardPage() {
   const saveName = () => {
     setPlayerName(name)
     setEditing(false)
-    // Publish today under the new name if it hasn't gone up yet (rows are
-    // append-only, so an already-published day keeps the name it was sent with),
-    // then refresh the boards.
-    submitDaily(day).finally(() => setTick(t => t + 1))
+    // Publish anything not yet on the board under the new name (rows are
+    // append-only, so already-published games keep the name they were sent
+    // with), then refresh the boards.
+    syncPendingResults().finally(() => setTick(t => t + 1))
   }
 
   const board = tab === 'today' ? daily : allTime
@@ -102,7 +102,7 @@ export default function LeaderboardPage() {
         <Trophy className="w-6 h-6 text-ochre-500"/>
         <h1 className="text-3xl font-black text-umber-700">Viongozi</h1>
       </div>
-      <p className="text-umber-400 text-sm mb-5">Nafasi yako kwenye Neno la Leo</p>
+      <p className="text-umber-400 text-sm mb-5">Nafasi yako kwenye michezo ya leo</p>
 
       {/* Player name + stats */}
       <div className="bg-white rounded-3xl p-5 shadow-card mb-5">
@@ -147,7 +147,7 @@ export default function LeaderboardPage() {
       )}
       {tab === 'today' && !daily.playerRank && (
         <div className="text-center mb-4 text-umber-400 text-sm bg-sand-200 rounded-2xl py-3 px-4">
-          Cheza Neno la Leo ili ujiunge na ubao.
+          Cheza mchezo wowote wa leo ili ujiunge na ubao.
         </div>
       )}
 

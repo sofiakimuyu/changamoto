@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import { VOCAB_CATEGORIES } from '../data/vocab-categories'
 import { seededShuffle } from '../lib/wordsearch'
 import { getDayIndex } from '../lib/wordle'
+import { recordResult, submitResult, pointsForPairMatch } from '../lib/leaderboard'
 import WinSheet from './WinSheet'
 
 const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
@@ -21,8 +22,10 @@ export default function PairMatch() {
   const [matched, setMatched] = useState<string[]>([])
   const [matchedEnglish, setMatchedEnglish] = useState<string[]>([])
   const [wrongFlash, setWrongFlash] = useState<string | null>(null)
+  const [mistakes, setMistakes] = useState(0)
   const [showWin, setShowWin] = useState(true)
   const puzzleDone = matched.length === puzzlePairs.length
+  const points = pointsForPairMatch(mistakes)
 
   const tapSwahili = (sw: string) => { if (!matched.includes(sw)) setSelectedSw(sw) }
   const tapEnglish = (en: string) => {
@@ -31,9 +34,19 @@ export default function PairMatch() {
     if (pair?.english === en) {
       setMatched(m => [...m, selectedSw!]); setMatchedEnglish(m => [...m, en]); setSelectedSw(null)
     } else {
+      setMistakes(m => m + 1)
       setWrongFlash(selectedSw); setTimeout(() => { setWrongFlash(null); setSelectedSw(null) }, 700)
     }
   }
+
+  // Score the day's puzzle on the first finish. As with the word search there's
+  // no saved game, so recording is idempotent per day to stop a replay
+  // re-scoring it with fewer mistakes.
+  useEffect(() => {
+    if (!puzzleDone) return
+    recordResult('pairmatch', dayIdx, true, null, points)
+    submitResult(dayIdx, 'pairmatch')
+  }, [puzzleDone, dayIdx, points])
 
   return (
     <div className="px-4 pb-10 max-w-lg mx-auto">
@@ -44,11 +57,14 @@ export default function PairMatch() {
         <div className="text-center py-10">
           <div className="text-6xl mb-4">✦</div>
           <h3 className="text-2xl font-black text-umber-700 mb-2">Umefanikiwa!</h3>
-          <p className="text-umber-400 mb-6">Umeoanisha jozi zote {puzzlePairs.length}!</p>
+          <p className="text-umber-400 mb-2">Umeoanisha jozi zote {puzzlePairs.length}!</p>
+          <p className="text-umber-600 font-bold mb-6">
+            Makosa: {mistakes} · Pointi: {points}
+          </p>
           {showWin && (
             <WinSheet emoji="✦" title="Umeshinda!"
-              subtitle={`Umeoanisha jozi zote ${puzzlePairs.length}!`}
-              shareText={`Changamoto · Oanisha Maneno · ${puzzlePairs.length}/${puzzlePairs.length}`}
+              subtitle={`Jozi ${puzzlePairs.length}/${puzzlePairs.length} · Makosa ${mistakes} · Pointi ${points}`}
+              shareText={`Changamoto · Oanisha Maneno · ${puzzlePairs.length}/${puzzlePairs.length} · ${points} pointi`}
               onClose={() => setShowWin(false)} />
           )}
         </div>
