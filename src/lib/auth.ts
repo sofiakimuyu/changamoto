@@ -4,8 +4,7 @@
 // isn't configured (see supabase.ts) — the UI checks `hasBackend` first.
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { supabase, hasBackend } from './supabase'
-import { setAuthUserId } from './leaderboard'
+import { supabase, hasBackend, setAuthUserId } from './supabase'
 
 // Where the magic link returns the player. Uses the app's base path so it works
 // both locally and under the GitHub Pages sub-path.

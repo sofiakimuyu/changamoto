@@ -42,6 +42,12 @@ create policy "anyone can submit a score"
   with check (true);
 -- Note: no UPDATE/DELETE policies, so rows are append-only from the anon key.
 
+-- RLS policies only ever *restrict*: a role still needs the underlying table
+-- privilege. Supabase grants these to anon/authenticated by default, but stating
+-- them makes this file self-sufficient — without them every insert is rejected
+-- and the board silently stays empty.
+grant select, insert on public.scores to anon, authenticated;
+
 -- ── All-time aggregate view ───────────────────────────────────────────────────
 -- Sum of points per device across the whole season, with the most recent name.
 create or replace view public.alltime_leaderboard as

@@ -42,3 +42,39 @@ export function getClientId(): string {
     return 'anonymous'
   }
 }
+
+// ── Leaderboard identity ─────────────────────────────────────────────────────
+// A signed-in player is identified by their auth user id (so progress follows
+// them across devices); otherwise the anonymous device id is used.
+//
+// The session is restored asynchronously, so anything that writes or matches a
+// score must first await `identityReady` — otherwise a signed-in player's score
+// races the session restore and lands under the device id instead, and their
+// own row never gets recognised on the board. Resolving it here (at module
+// load) rather than inside a component means the identity is settled on every
+// route, including a cold load straight into #/leaderboard.
+let authUserId: string | null = null
+
+export function setAuthUserId(id: string | null): void { authUserId = id }
+export function getAuthUserId(): string | null { return authUserId }
+
+/** Every id this player's rows may have been written under, best match first. */
+export function identityIds(): string[] {
+  const device = getClientId()
+  return authUserId && authUserId !== device ? [authUserId, device] : [device]
+}
+
+/** The id new rows are written under. */
+export function identityId(): string { return authUserId ?? getClientId() }
+
+/** Resolves once the auth session (if any) has been restored. */
+export const identityReady: Promise<void> = supabase
+  ? supabase.auth.getSession()
+      .then(({ data }) => { setAuthUserId(data.session?.user?.id ?? null) })
+      .catch(() => { /* stay anonymous */ })
+  : Promise.resolve()
+
+// Keep the identity current as the player signs in or out.
+supabase?.auth.onAuthStateChange((_event, session) => {
+  setAuthUserId(session?.user?.id ?? null)
+})

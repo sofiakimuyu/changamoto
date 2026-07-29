@@ -12,14 +12,7 @@
 // `submitDaily`, so the storage backing them can change without touching pages.
 
 import { MAX_ROWS, getDayIndex } from './wordle'
-import { supabase, hasBackend, getClientId } from './supabase'
-
-// When a player signs in, their auth user id becomes their leaderboard identity
-// (so progress follows them across devices); otherwise the anonymous device id
-// is used. Kept in a module var, updated by the auth listener.
-let authUserId: string | null = null
-export function setAuthUserId(id: string | null) { authUserId = id }
-function identityId(): string { return authUserId ?? getClientId() }
+import { supabase, hasBackend, identityId, identityIds, identityReady } from './supabase'
 
 const NAME_KEY = 'changamoto_player_name'
 const RESULTS_KEY = 'changamoto_daily_results_v1'
@@ -33,6 +26,10 @@ export interface DailyResult {
   guesses: number // number of guesses used (rows played)
   points: number
   ts: number
+  /** True once this result is known to exist on the shared board. Results saved
+   *  before this flag existed are treated as unpublished and re-sent, which is
+   *  harmless — a duplicate insert is ignored. */
+  published?: boolean
 }
 
 export interface LeaderRow {
@@ -40,6 +37,17 @@ export interface LeaderRow {
   points: number
   detail: string   // e.g. "3/6" for a day, or "12 played · 78% win" all-time
   isPlayer: boolean
+}
+
+/** Where a board's rows came from, so the UI can explain what it's showing. */
+export type BoardSource = 'shared' | 'local'
+
+export interface Board {
+  rows: LeaderRow[]
+  playerRank: number | null
+  source: BoardSource
+  /** Set when the shared board couldn't be read; rows fall back to local. */
+  error: string | null
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────
@@ -73,6 +81,14 @@ export function recordDaily(day: number, solved: boolean, guesses: number): void
   const results = loadResults()
   if (results[day]) return
   results[day] = { day, solved, guesses, points: pointsFor(solved, guesses), ts: Date.now() }
+  saveResults(results)
+}
+
+/** Remember that a day's result made it onto the shared board. */
+function markPublished(day: number): void {
+  const results = loadResults()
+  if (!results[day] || results[day].published) return
+  results[day] = { ...results[day], published: true }
   saveResults(results)
 }
 
@@ -217,20 +233,72 @@ function getSimulatedAllTime(): { rows: LeaderRow[]; playerRank: number | null }
 // ── Shared backend (Supabase) ────────────────────────────────────────────────
 interface ScoreRow { client_id: string; name: string; points: number; solved: boolean; guesses: number }
 
-/** Submit the player's finished daily result to the shared board (idempotent). */
-export async function submitDaily(day: number): Promise<void> {
-  if (!hasBackend || !supabase) return
+/** Outcome of publishing to the shared board. `ok` is false only on a real
+ *  failure — with no backend configured there is nothing to publish. */
+export interface SubmitOutcome { ok: boolean; error: string | null }
+
+const NOTHING_TO_DO: SubmitOutcome = { ok: true, error: null }
+
+/** Postgres unique-violation: the row is already on the board, so we're done. */
+const UNIQUE_VIOLATION = '23505'
+
+/**
+ * Submit the player's finished daily result to the shared board (idempotent).
+ *
+ * A plain INSERT is used rather than an upsert: the board is append-only (the
+ * schema grants anon INSERT and SELECT only, with no UPDATE policy), so an
+ * upsert's conflict resolution has nothing to fall back on. The unique
+ * (client_id, day) constraint gives idempotency for free — a repeat submit
+ * comes back as 23505, which means the score is already published.
+ */
+export async function submitDaily(day: number): Promise<SubmitOutcome> {
+  if (!hasBackend || !supabase) return NOTHING_TO_DO
   const pr = getPlayerResult(day)
-  if (!pr) return
-  const name = getPlayerName() || 'Anonymous'
-  // First result per device/day wins — ignore the conflict on re-submit.
-  const { error } = await supabase
-    .from('scores')
-    .upsert(
-      { client_id: identityId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points },
-      { onConflict: 'client_id,day', ignoreDuplicates: true },
-    )
-  if (error) console.warn('submitDaily failed:', error.message)
+  if (!pr) return NOTHING_TO_DO
+
+  // Wait for the session so a signed-in player's score is filed under their
+  // account id, not the device id it would race to otherwise.
+  await identityReady
+
+  const name = (getPlayerName() || 'Anonymous').trim().slice(0, 20) || 'Anonymous'
+  try {
+    const { error } = await supabase
+      .from('scores')
+      .insert({ client_id: identityId(), name, day, solved: pr.solved, guesses: pr.guesses, points: pr.points })
+    if (!error || error.code === UNIQUE_VIOLATION) {
+      markPublished(day)
+      return NOTHING_TO_DO
+    }
+    console.warn('submitDaily failed:', error.message, error.details ?? '')
+    return { ok: false, error: error.message }
+  } catch (e) {
+    // Network failure — the result stays unpublished and is retried later.
+    const message = e instanceof Error ? e.message : String(e)
+    console.warn('submitDaily failed:', message)
+    return { ok: false, error: message }
+  }
+}
+
+/**
+ * Re-send every finished day that never reached the shared board.
+ *
+ * Without this a single failed submit (offline, a transient error, or playing
+ * before the backend was reachable) would drop that day for good: nothing else
+ * ever retries, so the player finishes a game and never appears on the board.
+ */
+export async function syncPendingResults(): Promise<SubmitOutcome> {
+  if (!hasBackend || !supabase) return NOTHING_TO_DO
+  const pending = Object.values(loadResults())
+    .filter(r => !r.published)
+    .map(r => r.day)
+    .sort((a, b) => a - b)
+
+  let error: string | null = null
+  for (const day of pending) {
+    const outcome = await submitDaily(day)
+    if (!outcome.ok) error = outcome.error
+  }
+  return { ok: error === null, error }
 }
 
 function rankRows(rows: LeaderRow[]): { rows: LeaderRow[]; playerRank: number | null } {
@@ -239,47 +307,94 @@ function rankRows(rows: LeaderRow[]): { rows: LeaderRow[]; playerRank: number | 
   return { rows, playerRank: idx >= 0 ? idx + 1 : null }
 }
 
-/** Real (or simulated) ranked board for a single day. */
-export async function getDailyBoard(day: number): Promise<{ rows: LeaderRow[]; playerRank: number | null }> {
-  if (!hasBackend || !supabase) return getSimulatedDaily(day)
+function dailyDetail(solved: boolean, guesses: number): string {
+  return solved ? `${guesses}/${MAX_ROWS}` : `X/${MAX_ROWS}`
+}
 
-  const me = identityId()
+/** Real (or simulated) ranked board for a single day. */
+export async function getDailyBoard(day: number): Promise<Board> {
+  if (!hasBackend || !supabase) return { ...getSimulatedDaily(day), source: 'local', error: null }
+
+  await identityReady
+  const mine = identityIds()
   const { data, error } = await supabase
     .from('scores')
     .select('client_id,name,points,solved,guesses')
     .eq('day', day)
     .order('points', { ascending: false })
-  if (error) { console.warn('getDailyBoard failed:', error.message); return getSimulatedDaily(day) }
+  if (error) {
+    console.warn('getDailyBoard failed:', error.message)
+    return { ...getSimulatedDaily(day), source: 'local', error: error.message }
+  }
 
-  const rows: LeaderRow[] = (data as ScoreRow[]).map(r => ({
-    name: r.client_id === me ? (getPlayerName() || r.name) : r.name,
-    points: r.points,
-    detail: r.solved ? `${r.guesses}/${MAX_ROWS}` : 'X/6',
-    isPlayer: r.client_id === me,
-  }))
-  return rankRows(rows)
+  const rows: LeaderRow[] = (data as ScoreRow[]).map(r => {
+    const isPlayer = mine.includes(r.client_id)
+    return {
+      name: isPlayer ? (getPlayerName() || r.name) : r.name,
+      points: r.points,
+      detail: dailyDetail(r.solved, r.guesses),
+      isPlayer,
+    }
+  })
+
+  // The player's own finished game always shows, even when the shared board has
+  // no row for it yet — first play of the day, a submit that hasn't landed, or
+  // an offline finish. Being told "no scores yet" right after playing is the
+  // one thing the board must never do.
+  if (!rows.some(r => r.isPlayer)) {
+    const pr = getPlayerResult(day)
+    if (pr) {
+      rows.push({
+        name: playerLabel(),
+        points: pr.points,
+        detail: dailyDetail(pr.solved, pr.guesses),
+        isPlayer: true,
+      })
+    }
+  }
+  return { ...rankRows(rows), source: 'shared', error: null }
 }
 
-/** Real (or simulated) ranked all-time board. */
-export async function getAllTimeBoard(): Promise<{ rows: LeaderRow[]; playerRank: number | null }> {
-  if (!hasBackend || !supabase) return getSimulatedAllTime()
+interface AllTimeRow { client_id: string; name: string; points: number; played: number; wins: number }
 
-  const me = identityId()
+/** Real (or simulated) ranked all-time board. */
+export async function getAllTimeBoard(): Promise<Board> {
+  if (!hasBackend || !supabase) return { ...getSimulatedAllTime(), source: 'local', error: null }
+
+  await identityReady
+  const mine = identityIds()
   const { data, error } = await supabase
     .from('alltime_leaderboard')
     .select('client_id,name,points,played,wins')
     .order('points', { ascending: false })
-  if (error) { console.warn('getAllTimeBoard failed:', error.message); return getSimulatedAllTime() }
+  if (error) {
+    console.warn('getAllTimeBoard failed:', error.message)
+    return { ...getSimulatedAllTime(), source: 'local', error: error.message }
+  }
 
-  const rows: LeaderRow[] = (data as { client_id: string; name: string; points: number; played: number; wins: number }[])
-    .map(r => {
-      const winRate = r.played ? Math.round((r.wins / r.played) * 100) : 0
-      return {
-        name: r.client_id === me ? (getPlayerName() || r.name) : r.name,
-        points: r.points,
-        detail: `${r.played} played · ${winRate}% win`,
-        isPlayer: r.client_id === me,
-      }
-    })
-  return rankRows(rows)
+  const rows: LeaderRow[] = (data as AllTimeRow[]).map(r => {
+    const winRate = r.played ? Math.round((r.wins / r.played) * 100) : 0
+    const isPlayer = mine.includes(r.client_id)
+    return {
+      name: isPlayer ? (getPlayerName() || r.name) : r.name,
+      points: r.points,
+      detail: `${r.played} played · ${winRate}% win`,
+      isPlayer,
+    }
+  })
+
+  // Same guarantee as the daily board: if none of the shared rows are the
+  // player's, fall back to their locally recorded season.
+  if (!rows.some(r => r.isPlayer)) {
+    const stats = getPlayerStats()
+    if (stats.played > 0) {
+      rows.push({
+        name: playerLabel(),
+        points: stats.totalPoints,
+        detail: `${stats.played} played · ${stats.winRate}% win`,
+        isPlayer: true,
+      })
+    }
+  }
+  return { ...rankRows(rows), source: 'shared', error: null }
 }

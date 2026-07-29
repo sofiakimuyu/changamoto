@@ -77,6 +77,34 @@ To enable it, in the Supabase dashboard under **Authentication**:
 
 No schema change is needed — signed-in scores use the same `scores` table.
 
+### Troubleshooting: the board says "Bado hakuna alama"
+
+That message means the shared board came back with **zero rows**. Your own
+finished game is always merged in locally, so if you see it right after playing,
+scores are not reaching the `scores` table at all. Work through this in order:
+
+1. **Is the backend actually configured in the deployed build?** The GitHub Pages
+   workflow injects `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from repo
+   **Settings → Secrets and variables → Actions**. If they're unset the build
+   falls back to the simulated field (a roster of bot names) rather than an
+   empty board — so an *empty* board means the keys are present.
+2. **Has the schema been applied?** In the Supabase **SQL Editor**, run
+   `select count(*) from public.scores;`. A "relation does not exist" error means
+   [`supabase/schema.sql`](supabase/schema.sql) was never run — run it now. A
+   count of `0` means reads work but writes are being rejected; continue.
+3. **Can the public key write?** Re-run `supabase/schema.sql` (it's idempotent).
+   It grants `select, insert` on `public.scores` to `anon`/`authenticated` and
+   recreates the RLS policies. A missing INSERT grant or policy rejects every
+   submission while leaving reads working — exactly the empty-board symptom.
+4. **Check the browser console.** Failed submissions log
+   `submitDaily failed: <reason>`, and the leaderboard page shows a red banner
+   when publishing fails. The reason names the constraint, policy, or network
+   error responsible.
+
+Results are stored locally with a `published` flag, so anything that failed to
+send is retried automatically the next time the leaderboard page is opened —
+once the cause above is fixed, backlogged days publish themselves.
+
 ## Usage analytics
 
 A privacy-light analytics backend tracks **how many people use the game and how
