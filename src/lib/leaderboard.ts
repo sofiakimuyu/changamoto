@@ -41,9 +41,10 @@ export const GAME_IDS: GameId[] = ['wordle-3', 'wordle-4', 'wordle-5', 'wordle-6
 export function wordleGameId(length: number): GameId { return `wordle-${length}` as GameId }
 
 // ── Scoring ─────────────────────────────────────────────────────────────────
-/** Wordle, any length: fewer guesses → more points; a loss = 0. */
+/** Wordle, any length: fewer guesses → more points, and finishing without
+ *  getting it still scores — turning up counts. */
 export function pointsForWordle(solved: boolean, guesses: number): number {
-  if (!solved) return 0
+  if (!solved) return 10
   return Math.max(20, (MAX_ROWS - guesses + 1) * 20) // 1 guess→120 … 6 guesses→20
 }
 
@@ -101,7 +102,9 @@ function migrateLegacyResults(): Record<string, GameResult> {
         day: r.day,
         solved: !!r.solved,
         guesses: r.guesses ?? null,
-        points: r.points ?? 0,
+        // Rescored, not copied: v1 gave an unsolved game 0, the current scheme
+        // gives 10. schema.sql makes the matching correction server-side.
+        points: pointsForWordle(!!r.solved, r.guesses ?? MAX_ROWS),
         ts: r.ts ?? Date.now(),
         published: r.published,
       }
@@ -259,31 +262,40 @@ function gameSeed(bot: Bot, day: number, game: GameId): number {
   return bot.seed ^ (day * 2654435761) ^ h
 }
 
-/** A bot's simulated result for one game on one day. */
-function botGame(bot: Bot, day: number, game: GameId): { solved: boolean; points: number } {
-  const seed = gameSeed(bot, day, game)
-  if (rng(seed * 7) > 0.45 + bot.skill * 0.4) return { solved: false, points: -1 } // didn't play
-  if (rng(seed) >= bot.skill) return { solved: false, points: 0 }
+const SKIPPED = { played: false, solved: false, points: 0 }
 
+/** A bot's simulated result for one game on one day. */
+function botGame(bot: Bot, day: number, game: GameId): { played: boolean; solved: boolean; points: number } {
+  const seed = gameSeed(bot, day, game)
+  if (rng(seed * 7) > 0.45 + bot.skill * 0.4) return SKIPPED // didn't play it today
+  const solved = rng(seed) < bot.skill
+
+  // The word search and pair match are only ever recorded once completed, so an
+  // unsolved one is an abandoned game rather than a scoring result.
   if (game === 'wordsearch') {
+    if (!solved) return SKIPPED
     const tiers = [10, 20, 30, 40, 60, 80, 100, 125, 150]
     const i = Math.min(tiers.length - 1, Math.floor(rng(seed * 3) * (2 + bot.skill * 8)))
-    return { solved: true, points: tiers[i] }
+    return { played: true, solved: true, points: tiers[i] }
   }
   if (game === 'pairmatch') {
-    return { solved: true, points: pointsForPairMatch(Math.round(rng(seed * 5) * (1 - bot.skill) * 10)) }
+    if (!solved) return SKIPPED
+    const mistakes = Math.round(rng(seed * 5) * (1 - bot.skill) * 10)
+    return { played: true, solved: true, points: pointsForPairMatch(mistakes) }
   }
-  // Skilled players skew toward fewer guesses.
+
+  // Wordle scores either way; skilled players skew toward fewer guesses.
+  if (!solved) return { played: true, solved: false, points: pointsForWordle(false, MAX_ROWS) }
   const spread = rng(seed * 3) * (1 - bot.skill * 0.6)
   const guesses = Math.min(MAX_ROWS, Math.max(2, Math.round(2 + spread * 5)))
-  return { solved: true, points: pointsForWordle(true, guesses) }
+  return { played: true, solved: true, points: pointsForWordle(true, guesses) }
 }
 
 function botDay(bot: Bot, day: number): { played: number; wins: number; points: number } {
   let played = 0, wins = 0, points = 0
   for (const game of GAME_IDS) {
     const r = botGame(bot, day, game)
-    if (r.points < 0) continue // skipped this game today
+    if (!r.played) continue
     played++
     if (r.solved) wins++
     points += r.points

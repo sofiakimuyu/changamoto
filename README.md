@@ -39,7 +39,7 @@ is the sum of that day's games.
 
 | Game | Points |
 | --- | --- |
-| Neno la Leo and the 3/4/6-letter variants | `max(20, (6 − guesses + 1) × 20)` → 120 for a first-guess solve down to 20; a loss scores 0 |
+| Neno la Leo and the 3/4/6-letter variants | `max(20, (6 − guesses + 1) × 20)` → 120 for a first-guess solve down to 20 on the sixth; **10 for finishing without getting it** |
 | Tafuta Maneno | By solve time: 150 under 1 min, then 125 / 100 / 80 / 60 / 40 / 30 / 20 at each further minute, 10 for any finish |
 | Oanisha Maneno | 100 less 15 per wrong pairing, floor 25 |
 

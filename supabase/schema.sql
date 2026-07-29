@@ -44,6 +44,14 @@ alter table public.scores drop constraint if exists scores_points_match_game;
 alter table public.scores drop constraint if exists scores_client_id_day_key;
 alter table public.scores drop constraint if exists scores_client_id_day_game_key;
 
+-- A finished Wordle that wasn't solved now scores 10 rather than 0. Rescore any
+-- rows recorded under the old scheme, otherwise they fail the CHECK below (and
+-- the ALTER that adds it). Runs after the old constraints are dropped, since
+-- the previous check pinned an unsolved game to exactly 0.
+update public.scores
+   set points = 10
+ where not solved and points = 0 and game like 'wordle-%';
+
 alter table public.scores
   add constraint scores_client_id_check check (char_length(client_id) between 1 and 64),
   add constraint scores_name_check      check (char_length(name) between 1 and 20),
@@ -68,10 +76,11 @@ alter table public.scores
       -- Oanisha Maneno: 100 less 15 per mistake, floor 25 (pointsForPairMatch).
       when game = 'pairmatch' then
         solved and guesses is null and points in (25, 40, 55, 70, 85, 100)
-      -- Wordle, any length: max(20, (6 - guesses + 1) * 20); a loss is 0.
+      -- Wordle, any length: max(20, (6 - guesses + 1) * 20) when solved,
+      -- and a flat 10 for finishing without getting it (pointsForWordle).
       else
         guesses is not null
-        and points = case when solved then greatest(20, (6 - guesses + 1) * 20) else 0 end
+        and points = case when solved then greatest(20, (6 - guesses + 1) * 20) else 10 end
     end
   );
 
