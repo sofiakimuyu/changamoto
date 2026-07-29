@@ -16,6 +16,10 @@ Wordle challenge in the Hekima app.
 - **Leaderboard** — ranks you for the individual day and the running all-time
   season, with points, win-rate and streaks. Every game above scores (see
   [Leaderboard](#leaderboard)).
+- **Profile** (`#/profile`) — your own stats: totals, streaks, a per-game
+  breakdown and the guess distribution for Wordles you solved. Reached from
+  **Wasifu** in the top bar, which replaces the **Ingia** (sign in) option once
+  you have an account (see [Accounts](#accounts-supabase-auth)).
 
 ## Word data
 
@@ -77,10 +81,16 @@ and one row per device per day is enforced by a unique constraint.
 
 ### Accounts (Supabase Auth)
 
-The finish screen's **Sign up to track progress** uses passwordless email
-magic-links via Supabase Auth. When a player signs in, their account id becomes
-their leaderboard identity so progress follows them across devices; when signed
-out (or with no backend) an anonymous per-device id is used instead.
+The finish screen's **Sign up to track progress** — and the **Ingia** option in
+the top bar — use passwordless email magic-links via Supabase Auth. When a
+player signs in, their account id becomes their leaderboard identity so progress
+follows them across devices; when signed out (or with no backend) an anonymous
+per-device id is used instead.
+
+Signing in swaps the top-bar option to **Wasifu**, the player's profile at
+`#/profile`. It reads every `scores` row filed under any id the player owns, so
+the stats there cover all their devices, and folds in results this device has
+saved but not yet published so a fresh finish is never missing.
 
 To enable it, in the Supabase dashboard under **Authentication**:
 

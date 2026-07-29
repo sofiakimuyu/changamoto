@@ -173,14 +173,49 @@ function playerDayTotals(day: number): { played: number; wins: number; points: n
   return { played, wins, points }
 }
 
-export function getPlayerStats(): PlayerStats {
-  const results = Object.values(loadResults())
+/** One finished game, reduced to what the stats need. */
+interface StatRow { day: number; game: GameId; solved: boolean; guesses: number | null; points: number }
+
+/** Per-game totals shown on the profile. */
+export interface GameBreakdown {
+  game: GameId
+  played: number
+  wins: number
+  points: number
+}
+
+/** Everything the profile shows, `PlayerStats` plus the detailed cuts. */
+export interface ProfileSummary extends PlayerStats {
+  /** Distinct days on which at least one game was finished. */
+  daysPlayed: number
+  /** Games played, in `GAME_IDS` order; games never played are omitted. */
+  byGame: GameBreakdown[]
+  /** Solved Wordles by guess count — index 0 is "solved in 1". */
+  guessDistribution: number[]
+}
+
+function summarise(rows: StatRow[]): ProfileSummary {
   let wins = 0, totalPoints = 0
   // A day counts toward a streak if at least one game was solved on it.
   const solvedDays = new Set<number>()
-  for (const r of results) {
+  const days = new Set<number>()
+  const byGame = new Map<GameId, GameBreakdown>()
+  const guessDistribution = Array.from({ length: MAX_ROWS }, () => 0)
+
+  for (const r of rows) {
     totalPoints += r.points
+    days.add(r.day)
     if (r.solved) { wins++; solvedDays.add(r.day) }
+
+    const g = byGame.get(r.game) ?? { game: r.game, played: 0, wins: 0, points: 0 }
+    g.played++
+    if (r.solved) g.wins++
+    g.points += r.points
+    byGame.set(r.game, g)
+
+    if (r.solved && r.guesses && r.guesses >= 1 && r.guesses <= MAX_ROWS) {
+      guessDistribution[r.guesses - 1]++
+    }
   }
 
   const solved = [...solvedDays].sort((a, b) => a - b)
@@ -197,13 +232,63 @@ export function getPlayerStats(): PlayerStats {
   while (solvedDays.has(cursor)) { current++; cursor-- }
 
   return {
-    played: results.length,
+    played: rows.length,
     wins,
-    winRate: results.length ? Math.round((wins / results.length) * 100) : 0,
+    winRate: rows.length ? Math.round((wins / rows.length) * 100) : 0,
     totalPoints,
     currentStreak: current,
     bestStreak: best,
+    daysPlayed: days.size,
+    byGame: GAME_IDS.map(id => byGame.get(id)).filter((g): g is GameBreakdown => g !== undefined),
+    guessDistribution,
   }
+}
+
+/** Results saved on this device. */
+function localStatRows(): StatRow[] {
+  return Object.values(loadResults()).map(r => ({
+    day: r.day, game: r.game, solved: r.solved, guesses: r.guesses, points: r.points,
+  }))
+}
+
+export function getPlayerStats(): PlayerStats {
+  return summarise(localStatRows())
+}
+
+/** Profile stats, with where they were read from so the UI can say so. */
+export interface ProfileStats extends ProfileSummary {
+  source: BoardSource
+  /** Set when the shared history couldn't be read; totals fall back to local. */
+  error: string | null
+}
+
+/**
+ * The signed-in player's full history.
+ *
+ * Reads every score row filed under any id this player owns, so signing in on a
+ * new device shows the whole season rather than an empty profile. Results saved
+ * on this device that aren't on the shared board yet (offline, or a submit that
+ * hasn't landed) are folded in, so the profile never under-reports what the
+ * player just finished.
+ */
+export async function getProfileStats(): Promise<ProfileStats> {
+  const local = localStatRows()
+  if (!hasBackend || !supabase) return { ...summarise(local), source: 'local', error: null }
+
+  await identityReady
+  const { data, error } = await supabase
+    .from('scores')
+    .select('day,game,solved,guesses,points')
+    .in('client_id', identityIds())
+  if (error) {
+    console.warn('getProfileStats failed:', error.message)
+    return { ...summarise(local), source: 'local', error: error.message }
+  }
+
+  const shared = data as StatRow[]
+  const seen = new Set(shared.map(r => resultKey(r.day, r.game)))
+  const rows = [...shared, ...local.filter(r => !seen.has(resultKey(r.day, r.game)))]
+  return { ...summarise(rows), source: 'shared', error: null }
 }
 
 // ── Board rows ──────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { X, Mail, Check, Trophy } from 'lucide-react'
+import { X, Mail, Check, Trophy, User } from 'lucide-react'
 import { sendMagicLink, signOut, useAuth } from '../lib/auth'
+import { navigate } from '../lib/router'
 import { hasBackend } from '../lib/supabase'
 import { getPlayerName, setPlayerName } from '../lib/leaderboard'
 
@@ -46,6 +47,10 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
             <p className="text-umber-700 font-bold">Umeingia</p>
             <p className="text-umber-400 text-sm mb-5">{user.email}</p>
             <p className="text-umber-500 text-sm mb-5">Alama na mfululizo wako vimehifadhiwa kwenye akaunti yako na vinahesabika kwenye ubao wa viongozi.</p>
+            <button onClick={() => { navigate('/profile'); onClose() }}
+              className="w-full btn-primary mb-2 flex items-center justify-center gap-2">
+              <User className="w-4 h-4" /> Wasifu wangu
+            </button>
             <button onClick={() => { signOut(); onClose() }}
               className="w-full bg-white border-2 border-sand-200 text-umber-600 font-semibold py-3 rounded-full">
               Toka

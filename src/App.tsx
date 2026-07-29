@@ -4,6 +4,7 @@ import Nav from './components/Nav'
 import Home from './pages/Home'
 import MoreGames from './pages/MoreGames'
 import LeaderboardPage from './pages/LeaderboardPage'
+import ProfilePage from './pages/ProfilePage'
 import WordlePage from './pages/WordlePage'
 import WordSearch from './components/WordSearch'
 import PairMatch from './components/PairMatch'
@@ -20,6 +21,7 @@ function renderRoute(route: string) {
   if (route === '/' || route === '') return <Home />
   if (route === '/games') return <MoreGames />
   if (route === '/leaderboard') return <LeaderboardPage />
+  if (route === '/profile') return <ProfilePage />
   if (route === '/wordsearch') return <WordSearch />
   if (route === '/pairmatch') return <PairMatch />
 
