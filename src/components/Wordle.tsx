@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Delete, Share2, Grid3x3, Trophy } from 'lucide-react'
 import { WordleConfig } from '../lib/wordleConfig'
 import { answerForDay, scoreGuess, getDayIndex, MAX_ROWS, LetterState } from '../lib/wordle'
-import { recordDaily, submitDaily } from '../lib/leaderboard'
+import { recordResult, submitResult, pointsForWordle, wordleGameId } from '../lib/leaderboard'
 import { trackGameStart, trackGameComplete } from '../lib/analytics'
 import { navigate } from '../lib/router'
 import { playType, playFlip, playWin } from '../lib/sound'
@@ -49,9 +49,9 @@ const KEY_COLOR: Record<LetterState, string> = {
   absent:  'bg-umber-200 text-umber-500',
 }
 
-interface Props { config: WordleConfig; ranked?: boolean }
+interface Props { config: WordleConfig }
 
-export default function Wordle({ config, ranked = false }: Props) {
+export default function Wordle({ config }: Props) {
   const WORD_LEN = config.length
   const day = getDayIndex()
   const answer = useMemo(() => answerForDay(config.length, config.answers, day), [config, day])
@@ -69,7 +69,8 @@ export default function Wordle({ config, ranked = false }: Props) {
   const { user } = useAuth()
   const currentRef = useRef(current)
 
-  const gameKey = `wordle-${WORD_LEN}`
+  const gameId = wordleGameId(WORD_LEN)
+  const gameKey = gameId
 
   // Log that this game was opened, once per mount.
   useEffect(() => {
@@ -77,23 +78,24 @@ export default function Wordle({ config, ranked = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameKey])
 
-  // Record the outcome to the leaderboard once, for the ranked (daily) game.
+  // Record the outcome to the leaderboard once. Every length is ranked and
+  // scores under its own game id, so a day can hold one result per variant.
   useEffect(() => {
-    if (ranked && status !== 'playing') {
-      recordDaily(day, status === 'won', guesses.length)
-      // Publish to the shared leaderboard (no-op when no backend is configured).
-      submitDaily(day)
-    }
-  }, [ranked, status, day, guesses.length])
+    if (status === 'playing') return
+    const solved = status === 'won'
+    recordResult(gameId, day, solved, guesses.length, pointsForWordle(solved, guesses.length))
+    // Publish to the shared leaderboard (no-op when no backend is configured).
+    submitResult(day, gameId)
+  }, [gameId, status, day, guesses.length])
 
   // Log completion once, the moment a fresh game reaches a terminal state.
   const completeLogged = useRef(status !== 'playing')
   useEffect(() => {
     if (status !== 'playing' && !completeLogged.current) {
       completeLogged.current = true
-      trackGameComplete(gameKey, { solved: status === 'won', guesses: guesses.length, ranked })
+      trackGameComplete(gameKey, { solved: status === 'won', guesses: guesses.length })
     }
-  }, [status, gameKey, guesses.length, ranked])
+  }, [status, gameKey, guesses.length])
 
   const toast = useCallback((msg: string) => {
     setMessage(msg)

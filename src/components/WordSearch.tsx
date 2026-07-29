@@ -3,21 +3,10 @@ import { Check, Clock } from 'lucide-react'
 import { VOCAB_CATEGORIES } from '../data/vocab-categories'
 import { generateWordSearch, getCellsBetween, seededShuffle } from '../lib/wordsearch'
 import { getDayIndex } from '../lib/wordle'
+import { recordResult, submitResult, pointsForWordSearch } from '../lib/leaderboard'
 import WinSheet from './WinSheet'
 
 const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
-
-// Time-based scoring: the faster the puzzle is solved, the more points.
-// Thresholds are upper bounds in seconds; the first one the time falls under wins.
-const SCORE_TIERS: [maxSeconds: number, points: number][] = [
-  [60, 150], [120, 125], [180, 100], [240, 80],
-  [300, 60], [360, 40], [420, 30], [480, 20],
-]
-/** Points for solving the word search in `seconds`. 10 points for any finish. */
-function pointsForTime(seconds: number): number {
-  for (const [max, points] of SCORE_TIERS) if (seconds < max) return points
-  return 10
-}
 
 /** Format elapsed seconds as m:ss. */
 function formatTime(seconds: number): string {
@@ -65,7 +54,16 @@ export default function WordSearch() {
     solveTimeRef.current = Math.floor((Date.now() - startRef.current) / 1000)
   }
   const finalSeconds = solveTimeRef.current ?? elapsed
-  const points = pointsForTime(finalSeconds)
+  const points = pointsForWordSearch(finalSeconds)
+
+  // Score the day's puzzle on the first finish. There's no saved game to
+  // restore, so a reload restarts the grid — recording is idempotent per day,
+  // which keeps a replay from re-scoring it.
+  useEffect(() => {
+    if (!allFound) return
+    recordResult('wordsearch', dayIdx, true, null, points)
+    submitResult(dayIdx, 'wordsearch')
+  }, [allFound, dayIdx, points])
 
   const wsTapCell = (r: number, c: number) => {
     if (allFound) return

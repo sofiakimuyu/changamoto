@@ -1,14 +1,13 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Trophy, Pencil, Check, Flame } from 'lucide-react'
 import {
-  getDailyBoard, getAllTimeBoard, submitDaily,
-  getPlayerName, setPlayerName, getPlayerStats, LeaderRow,
+  getDailyBoard, getAllTimeBoard, syncPendingResults,
+  getPlayerName, setPlayerName, getPlayerStats, Board, LeaderRow,
 } from '../lib/leaderboard'
 import { hasBackend } from '../lib/supabase'
 import { getDayIndex } from '../lib/wordle'
 
-type Board = { rows: LeaderRow[]; playerRank: number | null }
-const EMPTY_BOARD: Board = { rows: [], playerRank: null }
+const EMPTY_BOARD: Board = { rows: [], playerRank: null, source: 'shared', error: null }
 
 type Tab = 'today' | 'alltime'
 
@@ -62,24 +61,37 @@ export default function LeaderboardPage() {
   const [daily, setDaily] = useState<Board>(EMPTY_BOARD)
   const [allTime, setAllTime] = useState<Board>(EMPTY_BOARD)
   const [loading, setLoading] = useState(true)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const stats = useMemo(() => getPlayerStats(), [tick])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
-    Promise.all([getDailyBoard(day), getAllTimeBoard()]).then(([d, a]) => {
-      if (!alive) return
-      setDaily(d); setAllTime(a); setLoading(false)
-    })
+    // Push up any finished day that never reached the shared board before
+    // reading it back, so a submit that failed earlier heals on this visit.
+    syncPendingResults()
+      .then(outcome => { if (alive) setSyncError(outcome.error) })
+      .then(() => Promise.all([getDailyBoard(day), getAllTimeBoard()]))
+      .then(([d, a]) => {
+        if (!alive) return
+        setDaily(d); setAllTime(a)
+      })
+      .catch(e => {
+        // Never leave the page stuck on the loading state.
+        console.warn('leaderboard load failed:', e)
+        if (alive) setSyncError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [day, tick])
 
   const saveName = () => {
     setPlayerName(name)
     setEditing(false)
-    // Re-publish under the new name, then refresh the boards.
-    submitDaily(day).finally(() => setTick(t => t + 1))
-    setTick(t => t + 1)
+    // Publish anything not yet on the board under the new name (rows are
+    // append-only, so already-published games keep the name they were sent
+    // with), then refresh the boards.
+    syncPendingResults().finally(() => setTick(t => t + 1))
   }
 
   const board = tab === 'today' ? daily : allTime
@@ -90,7 +102,7 @@ export default function LeaderboardPage() {
         <Trophy className="w-6 h-6 text-ochre-500"/>
         <h1 className="text-3xl font-black text-umber-700">Viongozi</h1>
       </div>
-      <p className="text-umber-400 text-sm mb-5">Nafasi yako kwenye Neno la Leo</p>
+      <p className="text-umber-400 text-sm mb-5">Nafasi yako kwenye michezo ya leo</p>
 
       {/* Player name + stats */}
       <div className="bg-white rounded-3xl p-5 shadow-card mb-5">
@@ -135,7 +147,15 @@ export default function LeaderboardPage() {
       )}
       {tab === 'today' && !daily.playerRank && (
         <div className="text-center mb-4 text-umber-400 text-sm bg-sand-200 rounded-2xl py-3 px-4">
-          Cheza Neno la Leo ili ujiunge na ubao.
+          Cheza mchezo wowote wa leo ili ujiunge na ubao.
+        </div>
+      )}
+
+      {/* A score that couldn't be published would otherwise fail silently, and
+          the player would just never appear on the board. */}
+      {syncError && (
+        <div className="mb-4 text-center text-sm bg-red-100 border border-red-300 text-red-700 rounded-2xl py-3 px-4">
+          Alama yako haikuweza kutumwa kwenye ubao wa pamoja. Tutajaribu tena utakapofungua ukurasa huu.
         </div>
       )}
 
@@ -143,14 +163,16 @@ export default function LeaderboardPage() {
         <div className="text-center text-umber-400 text-sm py-10">Inapakia viongozi…</div>
       ) : board.rows.length === 0 ? (
         <div className="text-center text-umber-400 text-sm bg-white rounded-2xl py-8 px-4 shadow-soft">
-          Bado hakuna alama — kuwa wa kwanza kwenye ubao!
+          {board.error
+            ? 'Imeshindikana kupakia ubao wa viongozi. Angalia mtandao kisha jaribu tena.'
+            : 'Bado hakuna alama — kuwa wa kwanza kwenye ubao!'}
         </div>
       ) : (
         <RankList rows={board.rows} playerRank={board.playerRank} />
       )}
 
       <p className="text-umber-300 text-[11px] text-center mt-6 leading-relaxed">
-        {hasBackend
+        {hasBackend && board.source === 'shared'
           ? 'Alama zinashirikiwa moja kwa moja kwa wachezaji wote. Utaonekana ukimaliza Neno la Leo la leo.'
           : 'Alama zako ni halisi na zimehifadhiwa kwenye kifaa hiki. Washindani wanaokuzunguka ni jamii ya kuigiza inayoonyeshwa hadi seva ya pamoja iunganishwe.'}
       </p>
