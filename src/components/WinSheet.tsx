@@ -18,7 +18,9 @@ interface Props {
 }
 
 export default function WinSheet({ emoji, title, subtitle, shareText, onClose }: Props) {
-  const { user } = useAuth()
+  // `loading` matters here: until the session is known we must not assume the
+  // player is a stranger and prompt them to sign up.
+  const { user, loading: authLoading } = useAuth()
   const [showSignup, setShowSignup] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -69,24 +71,23 @@ export default function WinSheet({ emoji, title, subtitle, shareText, onClose }:
               className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold btn-primary">
               <Share2 className="w-5 h-5"/> Shiriki
             </button>
-            {user ? (
-              // Already signed in — go straight to standings instead of signing up.
-              <button onClick={() => navigate('/leaderboard')}
+            {/* Signing up is only offered to someone who isn't a member yet.
+                A member — or a session still being restored — goes straight to
+                the standings, since their result is already being tracked. */}
+            {!user && !authLoading && (
+              <button onClick={() => setShowSignup(true)}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
-                <Trophy className="w-5 h-5"/> Tazama ubao wa viongozi
+                <Trophy className="w-5 h-5"/> Jisajili kufuatilia maendeleo
               </button>
-            ) : (
-              <>
-                <button onClick={() => setShowSignup(true)}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
-                  <Trophy className="w-5 h-5"/> Jisajili kufuatilia maendeleo
-                </button>
-                <button onClick={() => navigate('/leaderboard')}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-semibold bg-white border-2 border-sand-200 text-umber-600 active:scale-95 transition-transform">
-                  <Trophy className="w-5 h-5"/> Tazama ubao wa viongozi
-                </button>
-              </>
             )}
+            <button onClick={() => navigate('/leaderboard')}
+              className={`w-full flex items-center justify-center gap-2 py-4 rounded-full transition-transform active:scale-95 ${
+                user || authLoading
+                  ? 'font-bold bg-cobalt-500 text-white'
+                  : 'font-semibold bg-white border-2 border-sand-200 text-umber-600'
+              }`}>
+              <Trophy className="w-5 h-5"/> Tazama ubao wa viongozi
+            </button>
             <button onClick={() => navigate('/games')}
               className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-semibold bg-white border-2 border-sand-200 text-umber-600 active:scale-95 transition-transform">
               <Grid3x3 className="w-5 h-5"/> Cheza michezo zaidi

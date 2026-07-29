@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useHashRoute } from './lib/router'
+import { useHashRoute, navigate } from './lib/router'
 import Nav from './components/Nav'
 import Home from './pages/Home'
 import MoreGames from './pages/MoreGames'
@@ -62,6 +62,7 @@ export default function App() {
         <WelcomeScreen
           onPlay={() => { dismissWelcome(); setShowRules(true) }}
           onLogin={() => setShowLogin(true)}
+          onProfile={() => { dismissWelcome(); navigate('/profile') }}
         />
       )}
       {showRules && <HowToPlay onClose={() => setShowRules(false)} />}

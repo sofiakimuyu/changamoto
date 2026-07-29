@@ -1,12 +1,18 @@
 import { getDayIndex } from '../lib/wordle'
+import { useAuth } from '../lib/auth'
 
 // Wordmark tile colors, cycled across the letters — navy, teal, gold, terracotta.
 const TILE_COLORS = ['#34495E', '#4A9E8E', '#D9A93C', '#C05E45']
 
 // First-load splash, mirroring the NYT Wordle welcome: a small tiled logo, the
 // stylized wordmark, a one-line pitch, and two ways in — sign in, or just play.
-// "Cheza" hands off to the how-to-play screen; "Ingia" opens the account panel.
-export default function WelcomeScreen({ onPlay, onLogin }: { onPlay: () => void; onLogin: () => void }) {
+// "Cheza" hands off to the how-to-play screen; "Ingia" opens the account panel,
+// or, for a member, "Wasifu" opens their profile — never ask someone who already
+// has an account to make one.
+export default function WelcomeScreen(
+  { onPlay, onLogin, onProfile }: { onPlay: () => void; onLogin: () => void; onProfile: () => void },
+) {
+  const { user } = useAuth()
   const dayNumber = getDayIndex() - 20657 // human-friendly "edition #" since launch
   const today = new Date().toLocaleDateString('sw', { year: 'numeric', month: 'long', day: 'numeric' })
 
@@ -30,9 +36,9 @@ export default function WelcomeScreen({ onPlay, onLogin }: { onPlay: () => void;
 
       {/* Two ways in */}
       <div className="flex items-center gap-3 mb-8">
-        <button onClick={onLogin}
+        <button onClick={user ? onProfile : onLogin}
           className="px-8 py-3 rounded-full border-2 border-umber-700 text-umber-700 font-bold active:scale-95 transition-transform">
-          Ingia
+          {user ? 'Wasifu' : 'Ingia'}
         </button>
         <button onClick={onPlay}
           className="px-10 py-3 rounded-full bg-umber-700 text-white font-bold active:scale-95 transition-transform">
