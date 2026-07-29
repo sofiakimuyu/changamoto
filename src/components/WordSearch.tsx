@@ -10,8 +10,8 @@ const ALL_WORDS = VOCAB_CATEGORIES.flatMap(c => c.words)
 // Time-based scoring: the faster the puzzle is solved, the more points.
 // Thresholds are upper bounds in seconds; the first one the time falls under wins.
 const SCORE_TIERS: [maxSeconds: number, points: number][] = [
-  [30, 150], [60, 120], [90, 100], [120, 80],
-  [180, 60], [240, 40], [300, 30], [360, 20],
+  [60, 150], [120, 125], [180, 100], [240, 80],
+  [300, 60], [360, 40], [420, 30], [480, 20],
 ]
 /** Points for solving the word search in `seconds`. 10 points for any finish. */
 function pointsForTime(seconds: number): number {
@@ -46,25 +46,22 @@ export default function WordSearch() {
   const [wsWrongCells, setWsWrongCells] = useState<[number, number][]>([])
   const [showWin, setShowWin] = useState(true)
 
-  // Timer: starts on first tap, ticks each second, freezes when solved.
-  const [started, setStarted] = useState(false)
+  // Timer: starts as soon as the page loads, ticks each second, freezes when solved.
   const [elapsed, setElapsed] = useState(0)
-  const startRef = useRef<number | null>(null)
+  const startRef = useRef<number>(Date.now())
   const solveTimeRef = useRef<number | null>(null)
   const allFound = wsFound.length === wsWordList.length
 
   useEffect(() => {
-    if (!started || allFound) return
+    if (allFound) return
     const id = setInterval(() => {
-      if (startRef.current !== null) {
-        setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
-      }
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
     }, 250)
     return () => clearInterval(id)
-  }, [started, allFound])
+  }, [allFound])
 
   // Freeze the final solve time the moment every word is found.
-  if (allFound && solveTimeRef.current === null && startRef.current !== null) {
+  if (allFound && solveTimeRef.current === null) {
     solveTimeRef.current = Math.floor((Date.now() - startRef.current) / 1000)
   }
   const finalSeconds = solveTimeRef.current ?? elapsed
@@ -72,8 +69,6 @@ export default function WordSearch() {
 
   const wsTapCell = (r: number, c: number) => {
     if (allFound) return
-    // Start the clock on the very first interaction.
-    if (!started) { startRef.current = Date.now(); setStarted(true) }
     if (!wsFirst) { setWsFirst([r, c]); return }
     if (wsFirst[0] === r && wsFirst[1] === c) { setWsFirst(null); return }
     const cells = getCellsBetween(wsFirst, [r, c])
