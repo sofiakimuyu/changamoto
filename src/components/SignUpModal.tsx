@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { X, Mail, Check, Trophy } from 'lucide-react'
-import { sendMagicLink, signOut, useAuth } from '../lib/auth'
+import { sendSignInCode, verifySignInCode, signOut, useAuth } from '../lib/auth'
 import { hasBackend } from '../lib/supabase'
 import { getPlayerName, setPlayerName } from '../lib/leaderboard'
 
 // Sign-up / account panel. Passwordless: the player enters a display name and
-// email, we send a magic link, and signing in ties their progress + leaderboard
-// standing to that account across devices.
+// email, we email a six-digit code, and typing it back ties their progress +
+// leaderboard standing to that account across devices. Codes rather than links
+// because most players are on phones — see the note in lib/auth.ts.
 export default function SignUpModal({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
   const [name, setName] = useState(getPlayerName())
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [code, setCode] = useState('')
+  const [stage, setStage] = useState<'form' | 'code'>('form')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,10 +22,21 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
     if (!/^\S+@\S+\.\S+$/.test(email)) { setError('Weka anwani sahihi ya barua pepe.'); return }
     if (name.trim()) setPlayerName(name)       // leaderboard display name
     setBusy(true)
-    const { error } = await sendMagicLink(email)
+    const { error } = await sendSignInCode(email)
     setBusy(false)
     if (error) setError(error)
-    else setSent(true)
+    else { setCode(''); setStage('code') }
+  }
+
+  // On success `useAuth` sees the new session and this renders the signed-in
+  // branch, so there's nothing to set here beyond clearing the busy flag.
+  const verify = async () => {
+    setError(null)
+    if (!/^\d{6}$/.test(code.trim())) { setError('Weka namba ya tarakimu sita.'); return }
+    setBusy(true)
+    const { error } = await verifySignInCode(email, code)
+    setBusy(false)
+    if (error) setError('Namba si sahihi au imepitwa na wakati. Jaribu tena.')
   }
 
   return (
@@ -51,20 +64,39 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
               Toka
             </button>
           </div>
-        ) : sent ? (
-          // Magic link sent.
-          <div className="text-center py-4">
+        ) : stage === 'code' ? (
+          // Code sent — type it back here.
+          <div className="py-2">
             <div className="w-14 h-14 rounded-full bg-cobalt-100 flex items-center justify-center mx-auto mb-3">
               <Mail className="w-7 h-7 text-cobalt-500" />
             </div>
-            <p className="text-umber-700 font-bold mb-1">Check your email</p>
-            <p className="text-umber-400 text-sm">We sent a sign-in link to <strong>{email}</strong>. Open it on this device to finish.</p>
+            <p className="text-umber-700 font-bold text-center mb-1">Angalia barua pepe yako</p>
+            <p className="text-umber-400 text-sm text-center mb-4">
+              Tumetuma namba ya tarakimu sita kwa <strong>{email}</strong>.
+            </p>
+
+            <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') verify() }}
+              className="w-full px-3 py-3 rounded-xl border-2 border-sand-200 focus:border-ochre-400 outline-none
+                         text-center text-2xl font-black tracking-[0.4em] text-umber-700" />
+
+            {error && <p className="text-maasai-600 text-sm mt-3 text-center">{error}</p>}
+
+            <button onClick={verify} disabled={busy}
+              className="w-full btn-primary mt-4 flex items-center justify-center gap-2 disabled:opacity-60">
+              <Check className="w-4 h-4" /> {busy ? 'Inathibitisha…' : 'Thibitisha'}
+            </button>
+            <button onClick={() => { setStage('form'); setError(null) }} disabled={busy}
+              className="w-full text-umber-400 text-sm mt-3 font-semibold disabled:opacity-60">
+              Badilisha barua pepe au utume tena
+            </button>
           </div>
         ) : (
           // Sign-up form.
           <>
             <p className="text-umber-500 text-sm mb-4">
-              Hifadhi mfululizo wako na upande juu kwenye ubao wa viongozi. Hakuna nywila — tutakutumia kiungo cha kuingia kwa barua pepe.
+              Hifadhi mfululizo wako na upande juu kwenye ubao wa viongozi. Hakuna nywila — tutakutumia namba ya kuingia kwa barua pepe.
             </p>
             <label className="block text-[11px] font-bold text-umber-400 uppercase tracking-widest mb-1">Jina la kuonyesha</label>
             <input value={name} onChange={e => setName(e.target.value)} maxLength={20} placeholder="Jinsi unavyoonekana ubaoni"
@@ -83,7 +115,7 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
 
             <button onClick={submit} disabled={busy}
               className="w-full btn-primary mt-5 flex items-center justify-center gap-2 disabled:opacity-60">
-              <Mail className="w-4 h-4" /> {busy ? 'Inatuma…' : 'Tuma kiungo cha kuingia'}
+              <Mail className="w-4 h-4" /> {busy ? 'Inatuma…' : 'Tuma namba ya kuingia'}
             </button>
           </>
         )}
