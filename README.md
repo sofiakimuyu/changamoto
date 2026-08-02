@@ -82,26 +82,58 @@ and one row per device per day is enforced by a unique constraint.
 ### Accounts (Supabase Auth)
 
 The finish screen's **Sign up to track progress** — and the **Ingia** option in
-the top bar — use passwordless email magic-links via Supabase Auth. When a
-player signs in, their account id becomes their leaderboard identity so progress
-follows them across devices; when signed out (or with no backend) an anonymous
-per-device id is used instead.
+the top bar — are passwordless: the player enters an email, Supabase Auth emails
+a **six-digit code**, and typing it back signs them in. Their account id then
+becomes their leaderboard identity so progress follows them across devices; when
+signed out (or with no backend) an anonymous per-device id is used instead.
 
 Signing in swaps the top-bar option to **Wasifu**, the player's profile at
 `#/profile`. It reads every `scores` row filed under any id the player owns, so
 the stats there cover all their devices, and folds in results this device has
 saved but not yet published so a fresh finish is never missing.
 
+**Codes, not magic links** — on purpose. A link opened from a phone's mail app
+launches that app's *in-app* browser, which has its own `localStorage`, so the
+PKCE verifier written when the link was requested isn't there and the exchange
+fails. Our players are overwhelmingly on phones, so links lost a large share of
+sign-ins to a failure neither side could see. A code is retyped in the browser
+that started the flow, so the session lands where the player actually is.
+
 To enable it, in the Supabase dashboard under **Authentication**:
 
 1. Ensure **Email** sign-in is enabled (it is by default).
-2. Under **URL Configuration**, set the **Site URL** and add a **Redirect URL**
-   matching where the app is served, e.g. `https://<user>.github.io/changamoto/`
-   (and `http://localhost:5173/` for local dev). The magic link uses the PKCE
-   flow, so the code returns in the query string and never collides with the
-   app's hash router.
+2. **Email Templates → Magic Link**: replace `{{ .ConfirmationURL }}` with
+   `{{ .Token }}`. This is what makes Supabase send a code instead of a link —
+   `verifySignInCode` in [`src/lib/auth.ts`](src/lib/auth.ts) has nothing to
+   accept until this is changed, so **sign-in stays broken if you skip it**.
+3. Under **URL Configuration**, set the **Site URL** to `https://tatuafumbo.com`
+   and add `http://localhost:5173/` as a **Redirect URL** for local dev.
+4. Configure **custom SMTP** (next section) — otherwise sending is capped at
+   roughly two emails per hour across the whole project.
 
 No schema change is needed — signed-in scores use the same `scores` table.
+
+### Sending email (custom SMTP)
+
+Supabase's built-in mailer is a shared testing service limited to about **2
+emails per hour, project-wide**. That is a hard ceiling on sign-ups, and it is
+lifted by pointing Auth at your own sender: **Project Settings → Authentication
+→ SMTP Settings**. Once any custom SMTP is set, the cap becomes whatever you
+configure under **Authentication → Rate Limits** (default 30/hour).
+
+Two options, both free at our volume:
+
+- **Resend** (recommended, ~3,000/month free) — verify `tatuafumbo.com` in the
+  Resend dashboard, add the DKIM/SPF records it generates to DNS, then send as
+  `hello@tatuafumbo.com`. Best deliverability, and the From address matches the
+  site.
+- **Gmail** — host `smtp.gmail.com`, port `587`, your Google address, and an
+  **app password** (requires 2FA on the account). No DNS setup, ~500/day, but
+  mail arrives from a personal address.
+
+Credentials live in the Supabase dashboard only. Never commit them — nothing in
+this repo needs them, since the app asks Supabase to send and never sends mail
+itself.
 
 ### Troubleshooting: the board says "Bado hakuna alama"
 
@@ -195,6 +227,21 @@ npm run preview    # preview the production build
 
 ## Deploy
 
-`vite.config.ts` sets `base: '/changamoto/'` for production builds, matching a
-GitHub Pages project site at `https://<user>.github.io/changamoto/`. Adjust the
-base if you deploy elsewhere.
+The site is served by GitHub Pages on the custom domain
+**https://tatuafumbo.com**, so `vite.config.ts` sets `base: '/'` and
+[`public/CNAME`](public/CNAME) carries the domain. Vite copies `public/` into
+`dist/`, and `dist/` is what the workflow uploads — keeping `CNAME` in the build
+output is what stops a deploy from clearing the custom-domain setting. Moving
+back to a `github.io/changamoto/` sub-path means restoring `base` as well, or
+every asset URL 404s.
+
+DNS at the registrar — four A records on the apex, pointing at GitHub Pages:
+
+```
+185.199.108.153   185.199.109.153   185.199.110.153   185.199.111.153
+```
+
+plus a `CNAME` on `www` → `<user>.github.io`. Then in **Settings → Pages** set
+the custom domain and, once the certificate finishes issuing, tick **Enforce
+HTTPS**. Mail records (MX, DKIM, SPF) are independent of these and can coexist —
+A records route web traffic, MX routes mail.

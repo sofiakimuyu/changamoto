@@ -1,25 +1,42 @@
-// Email-based accounts via Supabase Auth (passwordless magic link). Signing in
-// gives a player a stable identity so their progress and leaderboard standing
+// Email-based accounts via Supabase Auth (passwordless six-digit code). Signing
+// in gives a player a stable identity so their progress and leaderboard standing
 // follow them across devices. All of this is a no-op when the Supabase backend
 // isn't configured (see supabase.ts) — the UI checks `hasBackend` first.
+//
+// A typed code rather than a magic link, deliberately. A link opened from a
+// phone's mail app lands in that app's in-app browser, which has its own
+// localStorage — so the PKCE verifier written when the code was requested isn't
+// there and the exchange fails. Most of our players are on phones, so the link
+// flow silently lost a large share of sign-ins. A code is read and re-typed in
+// the browser that started the flow, so the session lands where the player
+// actually is. Sending the code costs exactly what sending a link did.
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase, hasBackend, setAuthUserId } from './supabase'
 
-// Where the magic link returns the player. Uses the app's base path so it works
-// both locally and under the GitHub Pages sub-path.
-function redirectTo(): string {
-  return window.location.origin + import.meta.env.BASE_URL
+const NO_BACKEND = 'Accounts are not connected yet. Add the Supabase backend to enable sign-up.'
+
+/**
+ * Email a six-digit sign-in code to `email`, creating the account if it's new.
+ *
+ * Whether the player receives a code or a link is decided by the Supabase email
+ * template, not by this call: the "Magic Link" template must interpolate
+ * `{{ .Token }}`. Left as the stock `{{ .ConfirmationURL }}` this still works,
+ * but players get a link and `verifySignInCode` has nothing to accept.
+ */
+export async function sendSignInCode(email: string): Promise<{ error: string | null }> {
+  if (!hasBackend || !supabase) return { error: NO_BACKEND }
+  const { error } = await supabase.auth.signInWithOtp({ email: email.trim() })
+  return { error: error ? error.message : null }
 }
 
-/** Send a passwordless sign-in link to `email`. */
-export async function sendMagicLink(email: string): Promise<{ error: string | null }> {
-  if (!hasBackend || !supabase) {
-    return { error: 'Accounts are not connected yet. Add the Supabase backend to enable sign-up.' }
-  }
-  const { error } = await supabase.auth.signInWithOtp({
+/** Exchange the emailed code for a session. Codes expire after an hour. */
+export async function verifySignInCode(email: string, code: string): Promise<{ error: string | null }> {
+  if (!hasBackend || !supabase) return { error: NO_BACKEND }
+  const { error } = await supabase.auth.verifyOtp({
     email: email.trim(),
-    options: { emailRedirectTo: redirectTo() },
+    token: code.trim(),
+    type: 'email',
   })
   return { error: error ? error.message : null }
 }
