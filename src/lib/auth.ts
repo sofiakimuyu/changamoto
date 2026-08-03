@@ -16,6 +16,14 @@ import { supabase, hasBackend, setAuthUserId } from './supabase'
 
 const NO_BACKEND = 'Accounts are not connected yet. Add the Supabase backend to enable sign-up.'
 
+/** What a new player tells us about themselves when creating an account. */
+export interface SignUpProfile {
+  /** The player's real name. Kept on the account; never shown on the board. */
+  fullName: string
+  /** Public handle — what the leaderboard prints. */
+  username: string
+}
+
 /**
  * Email a six-digit sign-in code to `email`, creating the account if it's new.
  *
@@ -23,22 +31,58 @@ const NO_BACKEND = 'Accounts are not connected yet. Add the Supabase backend to 
  * template, not by this call: the "Magic Link" template must interpolate
  * `{{ .Token }}`. Left as the stock `{{ .ConfirmationURL }}` this still works,
  * but players get a link and `verifySignInCode` has nothing to accept.
+ *
+ * `profile` is passed for a sign-up and omitted for a returning player. Supabase
+ * only applies `options.data` when it actually creates the user, so this cannot
+ * overwrite an existing account's details — `saveProfile` below handles the
+ * already-a-member case, once there's a session to write with.
  */
-export async function sendSignInCode(email: string): Promise<{ error: string | null }> {
+export async function sendSignInCode(
+  email: string, profile?: SignUpProfile,
+): Promise<{ error: string | null }> {
   if (!hasBackend || !supabase) return { error: NO_BACKEND }
-  const { error } = await supabase.auth.signInWithOtp({ email: email.trim() })
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim(),
+    options: profile
+      ? { data: { full_name: profile.fullName, username: profile.username } }
+      : undefined,
+  })
   return { error: error ? error.message : null }
 }
 
-/** Exchange the emailed code for a session. Codes expire after an hour. */
-export async function verifySignInCode(email: string, code: string): Promise<{ error: string | null }> {
+/**
+ * Exchange the emailed code for a session. Codes expire after an hour.
+ *
+ * A `profile` is written onto the account after a successful verify, so a player
+ * who signs up with an email that already has an account still gets the name and
+ * username they just typed.
+ */
+export async function verifySignInCode(
+  email: string, code: string, profile?: SignUpProfile,
+): Promise<{ error: string | null }> {
   if (!hasBackend || !supabase) return { error: NO_BACKEND }
   const { error } = await supabase.auth.verifyOtp({
     email: email.trim(),
     token: code.trim(),
     type: 'email',
   })
-  return { error: error ? error.message : null }
+  if (error) return { error: error.message }
+  if (profile) await saveProfile(profile)
+  return { error: null }
+}
+
+/**
+ * Store the player's name and username on their account.
+ *
+ * Best-effort: the names are already saved locally and the board reads them from
+ * there, so a failure here costs nothing the player can see.
+ */
+export async function saveProfile(profile: SignUpProfile): Promise<void> {
+  if (!supabase) return
+  const { error } = await supabase.auth.updateUser({
+    data: { full_name: profile.fullName, username: profile.username },
+  })
+  if (error) console.warn('saveProfile failed:', error.message)
 }
 
 export async function signOut(): Promise<void> {

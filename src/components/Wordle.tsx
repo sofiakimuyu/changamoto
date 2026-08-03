@@ -38,6 +38,13 @@ export function getWordleStatus(len: number): 'won' | 'lost' | 'playing' | 'none
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
+/** True when a key event is aimed at somewhere the player is typing text. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+}
+
 const TILE_COLOR: Record<LetterState, string> = {
   correct: 'bg-savanna-500 border-savanna-500 text-white',
   present: 'bg-saffron-400 border-saffron-400 text-white',
@@ -153,6 +160,12 @@ export default function Wordle({ config }: Props) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // The board listens on `window`, so it would otherwise eat every letter,
+      // Enter and Backspace typed into a form on the same page — the sign-up
+      // modal's name and email fields sit right here, and typing into them did
+      // nothing at all. Anything aimed at an editable element belongs to that
+      // element, not to the grid.
+      if (isTypingTarget(e.target)) return
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
       if (k === 'Enter' || k === 'Backspace' || /^[a-z]$/.test(k)) { e.preventDefault(); onKey(k) }
     }
