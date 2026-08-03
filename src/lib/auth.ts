@@ -12,7 +12,10 @@
 // actually is. Sending the code costs exactly what sending a link did.
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { supabase, hasBackend, setAuthUserId } from './supabase'
+import {
+  supabase, hasBackend, setAuthUserId, getCachedMember, setCachedMember,
+  clearStoredSession, onMemberChange, Member,
+} from './supabase'
 
 const NO_BACKEND = 'Accounts are not connected yet. Add the Supabase backend to enable sign-up.'
 
@@ -85,32 +88,74 @@ export async function saveProfile(profile: SignUpProfile): Promise<void> {
   if (error) console.warn('saveProfile failed:', error.message)
 }
 
+/** How long a sign-out waits for the server before finishing without it. */
+const REVOKE_GRACE_MS = 2500
+
+/**
+ * Sign out on this device, and revoke on the server when it can be reached.
+ *
+ * Leaving is local first and unconditional. supabase-js keeps the stored
+ * session whenever its revoke call fails — and on a bad connection that call
+ * sits in retry backoff for seconds — so waiting on it means a player taps
+ * "Toka", sees nothing happen, and is signed back in when the network returns.
+ */
 export async function signOut(): Promise<void> {
-  if (supabase) await supabase.auth.signOut()
+  setCachedMember(null)   // notifies the UI immediately
+  setAuthUserId(null)
+  if (!supabase) return
+
+  const revoke = supabase.auth.signOut().then(() => undefined, () => undefined)
+  // The revoke can refresh the session on its way out, writing it back after
+  // we've cleared it, so clear again once it settles.
+  void revoke.then(dropStoredSession)
+  await Promise.race([revoke, new Promise(r => setTimeout(r, REVOKE_GRACE_MS))])
+  dropStoredSession()
 }
 
-/** React hook exposing the current signed-in user (or null). */
-export function useAuth(): { user: User | null; loading: boolean } {
+/** Drop the stored session unless someone has signed in since — a fresh
+ *  session belongs to whoever just signed in, not to the sign-out that left. */
+function dropStoredSession(): void {
+  if (!getCachedMember()) clearStoredSession()
+}
+
+/**
+ * The player's account state.
+ *
+ * `member` is the durable answer to "does this person have an account" — it is
+ * known synchronously on the first render, survives a backend that can't be
+ * reached, and is what the UI should branch on. `user` is the live session, and
+ * is null until it has been restored (and while it can't be), so anything
+ * needing a token — not the app's own UI — should use that.
+ */
+export function useAuth(): { user: User | null; member: Member | null; loading: boolean } {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(hasBackend)
+  const [member, setMember] = useState<Member | null>(() => getCachedMember())
+  // A remembered member has nothing to wait for: the UI already knows who they
+  // are, and holding it back only shows a returning player an empty top bar.
+  const [loading, setLoading] = useState(hasBackend && !getCachedMember())
 
   useEffect(() => {
-    if (!hasBackend || !supabase) { setLoading(false); return }
+    // supabase.ts keeps the remembered member current for every auth event, so
+    // following it here covers signing in, signing out, and a sign-out that
+    // never reached the server.
+    const unwatch = onMemberChange(setMember)
+    if (!hasBackend || !supabase) { setLoading(false); return unwatch }
     let alive = true
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!alive) return
-      setUser(data.session?.user ?? null)
-      setAuthUserId(data.session?.user?.id ?? null)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data }) => { if (alive) setUser(data.session?.user ?? null) })
+      // Never leave `loading` set: everything that tells a player where they
+      // stand is gated on it, and a session read that fails must not blank the
+      // account controls for the rest of the visit.
+      .catch(() => { /* the remembered member still stands */ })
+      .finally(() => { if (alive) setLoading(false) })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      setAuthUserId(session?.user?.id ?? null)
+      setLoading(false)
     })
-    return () => { alive = false; sub.subscription.unsubscribe() }
+    return () => { alive = false; unwatch(); sub.subscription.unsubscribe() }
   }, [])
 
-  return { user, loading }
+  return { user, member, loading }
 }

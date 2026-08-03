@@ -12,7 +12,7 @@ const TILE_COLORS = ['#34495E', '#4A9E8E', '#D9A93C', '#C05E45']
 export default function WelcomeScreen(
   { onPlay, onLogin, onProfile }: { onPlay: () => void; onLogin: () => void; onProfile: () => void },
 ) {
-  const { user } = useAuth()
+  const { member } = useAuth()
   const dayNumber = getDayIndex() - 20657 // human-friendly "edition #" since launch
   const today = new Date().toLocaleDateString('sw', { year: 'numeric', month: 'long', day: 'numeric' })
 
@@ -36,9 +36,9 @@ export default function WelcomeScreen(
 
       {/* Two ways in */}
       <div className="flex items-center gap-3 mb-8">
-        <button onClick={user ? onProfile : onLogin}
+        <button onClick={member ? onProfile : onLogin}
           className="px-8 py-3 rounded-full border-2 border-umber-700 text-umber-700 font-bold active:scale-95 transition-transform">
-          {user ? 'Wasifu' : 'Ingia'}
+          {member ? 'Wasifu' : 'Ingia'}
         </button>
         <button onClick={onPlay}
           className="px-10 py-3 rounded-full bg-umber-700 text-white font-bold active:scale-95 transition-transform">

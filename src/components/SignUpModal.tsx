@@ -30,7 +30,7 @@ function suggestUsername(name: string): string {
 }
 
 export default function SignUpModal({ onClose }: { onClose: () => void }) {
-  const { user } = useAuth()
+  const { member } = useAuth()
   const [mode, setMode] = useState<'signup' | 'signin'>('signup')
   const [fullName, setFullNameField] = useState(getFullName())
   const [email, setEmail] = useState('')
@@ -89,20 +89,20 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-ochre-500" />
             <h3 className="text-xl font-black text-umber-700">
-              {user ? 'Fuatilia maendeleo yako' : signingUp ? 'Fungua akaunti' : 'Ingia kwenye akaunti'}
+              {member ? 'Fuatilia maendeleo yako' : signingUp ? 'Fungua akaunti' : 'Ingia kwenye akaunti'}
             </h3>
           </div>
           <button onClick={onClose} className="text-umber-400"><X className="w-5 h-5" /></button>
         </div>
 
-        {user ? (
-          // Already signed in.
+        {member ? (
+          // Already a member — on this device, for good, until they sign out.
           <div className="text-center py-4">
             <div className="w-14 h-14 rounded-full bg-savanna-100 flex items-center justify-center mx-auto mb-3">
               <Check className="w-7 h-7 text-savanna-600" />
             </div>
             <p className="text-umber-700 font-bold">Umeingia</p>
-            <p className="text-umber-400 text-sm mb-5">{user.email}</p>
+            <p className="text-umber-400 text-sm mb-5">{member.email}</p>
             <p className="text-umber-500 text-sm mb-5">Alama na mfululizo wako vimehifadhiwa kwenye akaunti yako na vinahesabika kwenye ubao wa viongozi.</p>
             <button onClick={() => { navigate('/profile'); onClose() }}
               className="w-full btn-primary mb-2 flex items-center justify-center gap-2">

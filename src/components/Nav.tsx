@@ -22,7 +22,7 @@ export default function Nav() {
   const [showRules, setShowRules] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   // A member gets their profile in the top bar; everyone else gets the way in.
-  const { user, loading } = useAuth()
+  const { member, loading } = useAuth()
 
   return (
     <>
@@ -36,7 +36,7 @@ export default function Nav() {
           <nav className="flex items-center gap-0.5">
             {/* Hidden until the session is known, so the bar doesn't flash the
                 wrong option to a signed-in player on load. */}
-            {!loading && (user
+            {(member || !loading) && (member
               ? <NavButton onClick={() => navigate('/profile')} icon={<User className="w-4 h-4"/>} label="Wasifu" />
               : <NavButton onClick={() => setShowLogin(true)} icon={<LogIn className="w-4 h-4"/>} label="Ingia" />
             )}

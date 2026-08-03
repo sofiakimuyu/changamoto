@@ -27,7 +27,7 @@ const GAME_META: Record<GameId, { emoji: string; title: string }> = {
 }
 
 export default function ProfilePage() {
-  const { user, loading: authLoading } = useAuth()
+  const { member, loading: authLoading } = useAuth()
   const [name, setName] = useState(getPlayerName())
   const [editing, setEditing] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
@@ -52,7 +52,7 @@ export default function ProfilePage() {
       .catch(e => { console.warn('profile load failed:', e) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [tick, user?.id])
+  }, [tick, member?.id])
 
   const saveName = () => {
     setPlayerName(name)
@@ -103,7 +103,7 @@ export default function ProfilePage() {
                     shown to them — the board prints the username above. */}
                 {fullName && <p className="text-umber-500 text-sm truncate">{fullName}</p>}
                 <p className="text-umber-400 text-sm truncate">
-                  {user ? user.email : 'Unacheza kwenye kifaa hiki pekee'}
+                  {member ? (member.email || 'Umeingia') : 'Unacheza kwenye kifaa hiki pekee'}
                 </p>
               </>
             )}
@@ -123,7 +123,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {user ? (
+        {member ? (
           <button onClick={() => signOut()}
             className="w-full mt-4 bg-white border-2 border-sand-200 text-umber-600 font-semibold py-2.5 rounded-full flex items-center justify-center gap-2">
             <LogOut className="w-4 h-4" /> Toka
