@@ -24,14 +24,16 @@ interface DailyRow { day: string; active_users: number; sessions: number; plays:
 interface GameRow { game: string; plays: number; completions: number; players: number; completion_rate: number | null }
 interface RetentionRow { bucket: string; users: number }
 
-// Friendly labels for game keys.
+// Friendly labels for game keys. This dashboard is internal and read by both
+// Swahili and English speakers, so every Swahili label carries an English gloss
+// in parentheses.
 const GAME_LABELS: Record<string, string> = {
-  'wordle-5': 'Neno la Leo (herufi 5)',
-  'wordle-3': 'Neno la Herufi 3',
-  'wordle-4': 'Neno la Herufi 4',
-  'wordle-6': 'Neno la Herufi 6',
-  'wordsearch': 'Tafuta Maneno',
-  'pairmatch': 'Oanisha Maneno',
+  'wordle-5': 'Neno la Leo (Word of the Day) — herufi 5 (5 letters)',
+  'wordle-3': 'Neno la Herufi 3 (3-Letter Word)',
+  'wordle-4': 'Neno la Herufi 4 (4-Letter Word)',
+  'wordle-6': 'Neno la Herufi 6 (6-Letter Word)',
+  'wordsearch': 'Tafuta Maneno (Word Search)',
+  'pairmatch': 'Oanisha Maneno (Match the Words)',
 }
 const gameLabel = (k: string) => GAME_LABELS[k] ?? k
 
@@ -73,9 +75,11 @@ export default function AnalyticsPage() {
     <div className="max-w-3xl mx-auto px-4 pt-6 pb-16">
       <div className="flex items-center gap-2 mb-1">
         <BarChart3 className="w-6 h-6 text-ochre-500" />
-        <h1 className="text-3xl font-black text-umber-700">Takwimu</h1>
+        <h1 className="text-3xl font-black text-umber-700">Takwimu (Statistics)</h1>
       </div>
-      <p className="text-umber-400 text-sm mb-6">Watu wangapi wanacheza, na mara ngapi</p>
+      <p className="text-umber-400 text-sm mb-6">
+        Watu wangapi wanacheza, na mara ngapi (How many people play, and how often)
+      </p>
 
       {!hasBackend ? (
         <NoBackend />
@@ -85,54 +89,57 @@ export default function AnalyticsPage() {
           setUnlocked(true)
         }} />
       ) : loading ? (
-        <div className="text-center text-umber-400 text-sm py-10">Inapakia takwimu…</div>
+        <div className="text-center text-umber-400 text-sm py-10">
+          Inapakia takwimu… (Loading statistics…)
+        </div>
       ) : (
         <>
           {error && (
             <div className="bg-maasai-100 text-maasai-700 rounded-2xl px-4 py-3 text-sm mb-5">
-              Baadhi ya takwimu hazikupatikana: {error}. Hakikisha umeendesha <code>supabase/analytics.sql</code>.
+              Baadhi ya takwimu hazikupatikana (Some statistics could not be loaded): {error}.
+              {' '}Hakikisha umeendesha (Make sure you have run) <code>supabase/analytics.sql</code>.
             </div>
           )}
 
           {/* Headline metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <Metric icon={<Users className="w-4 h-4" />} label="Watumiaji" value={overview?.total_users ?? 0}
-              hint="Vifaa vyote vilivyocheza" />
-            <Metric icon={<Activity className="w-4 h-4" />} label="Vipindi" value={overview?.total_sessions ?? 0}
-              hint="Ziara zote" />
-            <Metric icon={<Gamepad2 className="w-4 h-4" />} label="Michezo" value={overview?.total_plays ?? 0}
-              hint="Michezo iliyoanzishwa" />
-            <Metric icon={<Repeat className="w-4 h-4" />} label="Tukio" value={overview?.total_events ?? 0}
-              hint="Matukio yote" />
+            <Metric icon={<Users className="w-4 h-4" />} label="Watumiaji (Users)" value={overview?.total_users ?? 0}
+              hint="Vifaa vyote vilivyocheza (All devices that have played)" />
+            <Metric icon={<Activity className="w-4 h-4" />} label="Vipindi (Sessions)" value={overview?.total_sessions ?? 0}
+              hint="Ziara zote (All visits)" />
+            <Metric icon={<Gamepad2 className="w-4 h-4" />} label="Michezo (Games)" value={overview?.total_plays ?? 0}
+              hint="Michezo iliyoanzishwa (Games started)" />
+            <Metric icon={<Repeat className="w-4 h-4" />} label="Tukio (Events)" value={overview?.total_events ?? 0}
+              hint="Matukio yote (All events)" />
           </div>
 
           {/* Active users window */}
-          <Card title="Watumiaji hai">
+          <Card title="Watumiaji hai (Active users)">
             <div className="grid grid-cols-3 gap-3 text-center">
-              <ActiveStat label="Leo (24h)" value={overview?.active_users_1d ?? 0} />
-              <ActiveStat label="Wiki (7d)" value={overview?.active_users_7d ?? 0} />
-              <ActiveStat label="Mwezi (30d)" value={overview?.active_users_30d ?? 0} />
+              <ActiveStat label="Leo (Today, 24h)" value={overview?.active_users_1d ?? 0} />
+              <ActiveStat label="Wiki (Week, 7d)" value={overview?.active_users_7d ?? 0} />
+              <ActiveStat label="Mwezi (Month, 30d)" value={overview?.active_users_30d ?? 0} />
             </div>
           </Card>
 
           {/* Daily trend */}
-          <Card title="Mwenendo wa kila siku">
+          <Card title="Mwenendo wa kila siku (Daily trend)">
             {daily.length === 0
-              ? <Empty text="Bado hakuna matukio." />
+              ? <Empty text="Bado hakuna matukio. (No events yet.)" />
               : <DailyChart rows={daily.slice(-30)} />}
           </Card>
 
           {/* Per-game popularity */}
-          <Card title="Michezo maarufu">
+          <Card title="Michezo maarufu (Most popular games)">
             {games.length === 0
-              ? <Empty text="Bado hakuna michezo iliyorekodiwa." />
+              ? <Empty text="Bado hakuna michezo iliyorekodiwa. (No games recorded yet.)" />
               : <GameBars rows={games} />}
           </Card>
 
           {/* Engagement / stickiness */}
-          <Card title="Wanaorudi">
+          <Card title="Wanaorudi (Returning players)">
             {retention.length === 0
-              ? <Empty text="Bado hakuna data ya kutosha." />
+              ? <Empty text="Bado hakuna data ya kutosha. (Not enough data yet.)" />
               : <Retention rows={retention} />}
           </Card>
         </>
@@ -188,14 +195,14 @@ function DailyChart({ rows }: { rows: DailyRow[] }) {
               style={{ height: `${(r.active_users / max) * 100}%`, minHeight: r.active_users ? '3px' : '0' }} />
             <div className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap
               bg-umber-700 text-white text-[10px] rounded-md px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-              {r.day.slice(5)}: {r.active_users} watu · {r.plays} michezo
+              {r.day.slice(5)}: {r.active_users} watu (people) · {r.plays} michezo (games)
             </div>
           </div>
         ))}
       </div>
       <div className="flex justify-between text-umber-300 text-[10px] mt-2">
         <span>{rows[0]?.day.slice(5)}</span>
-        <span>Watumiaji hai kwa siku</span>
+        <span>Watumiaji hai kwa siku (Active users per day)</span>
         <span>{rows[rows.length - 1]?.day.slice(5)}</span>
       </div>
     </div>
@@ -211,8 +218,8 @@ function GameBars({ rows }: { rows: GameRow[] }) {
           <div className="flex items-center justify-between text-sm mb-1">
             <span className="font-semibold text-umber-700">{gameLabel(r.game)}</span>
             <span className="text-umber-400 text-xs">
-              {r.plays.toLocaleString()} michezo · {r.players} watu
-              {r.completion_rate != null && ` · ${r.completion_rate}% wamemaliza`}
+              {r.plays.toLocaleString()} michezo (games) · {r.players} watu (people)
+              {r.completion_rate != null && ` · ${r.completion_rate}% wamemaliza (completed)`}
             </span>
           </div>
           <div className="h-2.5 bg-sand-100 rounded-full overflow-hidden">
@@ -238,11 +245,13 @@ function Retention({ rows }: { rows: RetentionRow[] }) {
             <div className="flex-1 h-4 bg-sand-100 rounded-full overflow-hidden">
               <div className="h-full bg-saffron-400 rounded-full" style={{ width: `${pct}%` }} />
             </div>
-            <span className="w-20 text-right text-umber-500 text-xs">{r.users} watu · {pct}%</span>
+            <span className="w-24 text-right text-umber-500 text-xs">{r.users} watu (people) · {pct}%</span>
           </div>
         )
       })}
-      <p className="text-umber-300 text-[11px] pt-1">Idadi ya siku tofauti kila kifaa kimecheza.</p>
+      <p className="text-umber-300 text-[11px] pt-1">
+        Idadi ya siku tofauti kila kifaa kimecheza. (Number of separate days each device has played.)
+      </p>
     </div>
   )
 }
@@ -262,19 +271,21 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
       <div className="w-12 h-12 rounded-full bg-sand-200 flex items-center justify-center mx-auto mb-3">
         <Lock className="w-6 h-6 text-umber-500" />
       </div>
-      <h2 className="font-black text-umber-700 mb-1">Takwimu ni za ndani</h2>
-      <p className="text-umber-400 text-sm mb-5">Weka nywila ili kuona takwimu.</p>
+      <h2 className="font-black text-umber-700 mb-1">Takwimu ni za ndani (Statistics are internal)</h2>
+      <p className="text-umber-400 text-sm mb-5">
+        Weka nywila ili kuona takwimu. (Enter the password to view the statistics.)
+      </p>
       <input
         value={value}
         onChange={e => { setValue(e.target.value); setErr(false) }}
         onKeyDown={e => { if (e.key === 'Enter') submit() }}
         type="password"
-        placeholder="Nywila"
+        placeholder="Nywila (Password)"
         autoFocus
         className="w-full px-3 py-2.5 rounded-xl border-2 border-sand-200 focus:border-ochre-400 outline-none font-semibold text-umber-700"
       />
-      {err && <p className="text-maasai-600 text-sm mt-3">Nywila si sahihi.</p>}
-      <button onClick={submit} className="w-full btn-primary mt-4">Fungua</button>
+      {err && <p className="text-maasai-600 text-sm mt-3">Nywila si sahihi. (Incorrect password.)</p>}
+      <button onClick={submit} className="w-full btn-primary mt-4">Fungua (Unlock)</button>
     </div>
   )
 }
@@ -283,10 +294,15 @@ function NoBackend() {
   return (
     <div className="bg-white rounded-3xl p-6 shadow-card text-center">
       <p className="text-umber-600 mb-3">
-        Takwimu zinahitaji seva ya Supabase. Weka <code>VITE_SUPABASE_URL</code> na
-        {' '}<code>VITE_SUPABASE_ANON_KEY</code>, kisha endesha <code>supabase/analytics.sql</code>.
+        Takwimu zinahitaji seva ya Supabase. (Statistics require a Supabase server.)
+        {' '}Weka (Set) <code>VITE_SUPABASE_URL</code> na (and)
+        {' '}<code>VITE_SUPABASE_ANON_KEY</code>, kisha endesha (then run)
+        {' '}<code>supabase/analytics.sql</code>.
       </p>
-      <p className="text-umber-400 text-sm">Bila seva, mchezo hukimbia lakini hakuna takwimu zinazokusanywa.</p>
+      <p className="text-umber-400 text-sm">
+        Bila seva, mchezo hukimbia lakini hakuna takwimu zinazokusanywa.
+        {' '}(Without a server the game still runs, but no statistics are collected.)
+      </p>
     </div>
   )
 }
