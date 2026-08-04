@@ -38,6 +38,13 @@ export function getWordleStatus(len: number): 'won' | 'lost' | 'playing' | 'none
 
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
 
+/** True when a key event is aimed at somewhere the player is typing text. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+}
+
 const TILE_COLOR: Record<LetterState, string> = {
   correct: 'bg-savanna-500 border-savanna-500 text-white',
   present: 'bg-saffron-400 border-saffron-400 text-white',
@@ -68,7 +75,7 @@ export default function Wordle({ config }: Props) {
 
   // `loading` matters here: until the session is known we must not assume the
   // player is a stranger and prompt them to sign up.
-  const { user, loading: authLoading } = useAuth()
+  const { member, loading: authLoading } = useAuth()
   const currentRef = useRef(current)
 
   const gameId = wordleGameId(WORD_LEN)
@@ -153,6 +160,12 @@ export default function Wordle({ config }: Props) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // The board listens on `window`, so it would otherwise eat every letter,
+      // Enter and Backspace typed into a form on the same page — the sign-up
+      // modal's name and email fields sit right here, and typing into them did
+      // nothing at all. Anything aimed at an editable element belongs to that
+      // element, not to the grid.
+      if (isTypingTarget(e.target)) return
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
       if (k === 'Enter' || k === 'Backspace' || /^[a-z]$/.test(k)) { e.preventDefault(); onKey(k) }
     }
@@ -332,7 +345,7 @@ export default function Wordle({ config }: Props) {
               {/* Signing up is only offered to someone who isn't a member yet.
                   A member — or a session still being restored — goes straight to
                   the standings, since their result is already being tracked. */}
-              {!user && !authLoading && (
+              {!member && !authLoading && (
                 <button onClick={() => setShowSignup(true)}
                   className="w-full flex items-center justify-center gap-2 py-4 rounded-full font-bold bg-cobalt-500 text-white active:scale-95 transition-transform">
                   <Trophy className="w-5 h-5"/> Jisajili kufuatilia maendeleo
@@ -340,7 +353,7 @@ export default function Wordle({ config }: Props) {
               )}
               <button onClick={() => navigate('/leaderboard')}
                 className={`w-full flex items-center justify-center gap-2 py-4 rounded-full transition-transform active:scale-95 ${
-                  user || authLoading
+                  member || authLoading
                     ? 'font-bold bg-cobalt-500 text-white'
                     : 'font-semibold bg-white border-2 border-sand-200 text-umber-600'
                 }`}>

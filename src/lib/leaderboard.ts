@@ -26,6 +26,7 @@ import { MAX_ROWS, getDayIndex } from './wordle'
 import { supabase, hasBackend, identityId, identityIds, identityReady } from './supabase'
 
 const NAME_KEY = 'changamoto_player_name'
+const FULL_NAME_KEY = 'changamoto_player_full_name'
 const RESULTS_KEY = 'changamoto_daily_results_v2'
 // v1 held only the 5-letter game, keyed by day alone.
 const LEGACY_RESULTS_KEY = 'changamoto_daily_results_v1'
@@ -65,11 +66,23 @@ export function pointsForPairMatch(mistakes: number): number {
 }
 
 // ── Player identity ─────────────────────────────────────────────────────────
+// Two names, deliberately. The *username* is what the board shows and what goes
+// into `scores.name` — short, public, capped at the column's 20 characters. The
+// *full name* is only ever the player's own (profile greeting, account records)
+// and never reaches the board.
 export function getPlayerName(): string {
   try { return localStorage.getItem(NAME_KEY) || '' } catch { return '' }
 }
 export function setPlayerName(name: string): void {
   try { localStorage.setItem(NAME_KEY, name.trim().slice(0, 20)) } catch { /* ignore */ }
+}
+
+/** The player's real name, collected at sign-up. Not shown on the board. */
+export function getFullName(): string {
+  try { return localStorage.getItem(FULL_NAME_KEY) || '' } catch { return '' }
+}
+export function setFullName(name: string): void {
+  try { localStorage.setItem(FULL_NAME_KEY, name.trim().slice(0, 60)) } catch { /* ignore */ }
 }
 
 // ── Result persistence ──────────────────────────────────────────────────────

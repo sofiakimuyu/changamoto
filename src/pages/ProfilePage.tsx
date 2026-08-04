@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { User, Pencil, Check, Flame, Trophy, LogOut, Mail } from 'lucide-react'
 import {
   getProfileStats, getAllTimeBoard, syncPendingResults,
-  getPlayerName, setPlayerName, GameId, ProfileStats,
+  getPlayerName, setPlayerName, getFullName, GameId, ProfileStats,
 } from '../lib/leaderboard'
 import { useAuth, signOut } from '../lib/auth'
 import { hasBackend } from '../lib/supabase'
@@ -27,7 +27,7 @@ const GAME_META: Record<GameId, { emoji: string; title: string }> = {
 }
 
 export default function ProfilePage() {
-  const { user, loading: authLoading } = useAuth()
+  const { member, loading: authLoading } = useAuth()
   const [name, setName] = useState(getPlayerName())
   const [editing, setEditing] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
@@ -52,7 +52,7 @@ export default function ProfilePage() {
       .catch(e => { console.warn('profile load failed:', e) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [tick, user?.id])
+  }, [tick, member?.id])
 
   const saveName = () => {
     setPlayerName(name)
@@ -63,6 +63,7 @@ export default function ProfilePage() {
   }
 
   const displayName = getPlayerName() || 'Mchezaji'
+  const fullName = getFullName()
   const initial = displayName.trim().charAt(0).toUpperCase() || '?'
   const bestGuess = stats.guessDistribution.reduce((max, n) => Math.max(max, n), 0)
 
@@ -83,7 +84,7 @@ export default function ProfilePage() {
           <div className="flex-1 min-w-0">
             {editing ? (
               <div className="flex items-center gap-2">
-                <input value={name} onChange={e => setName(e.target.value)} maxLength={20} placeholder="Jina lako"
+                <input value={name} onChange={e => setName(e.target.value)} maxLength={20} placeholder="Jina la mtumiaji"
                   className="flex-1 min-w-0 px-3 py-2 rounded-xl border-2 border-sand-200 focus:border-ochre-400 outline-none font-semibold text-umber-700" />
                 <button onClick={saveName} className="btn-primary !px-4 !py-2 flex items-center gap-1">
                   <Check className="w-4 h-4" /> Hifadhi
@@ -94,12 +95,15 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-2">
                   <p className="font-black text-umber-700 text-lg truncate">{displayName}</p>
                   <button onClick={() => { setName(getPlayerName()); setEditing(true) }}
-                    className="text-umber-400 shrink-0" aria-label="Badilisha jina">
+                    className="text-umber-400 shrink-0" aria-label="Badilisha jina la mtumiaji">
                     <Pencil className="w-4 h-4" />
                   </button>
                 </div>
+                {/* The real name, when the player gave one at sign-up. Only ever
+                    shown to them — the board prints the username above. */}
+                {fullName && <p className="text-umber-500 text-sm truncate">{fullName}</p>}
                 <p className="text-umber-400 text-sm truncate">
-                  {user ? user.email : 'Unacheza kwenye kifaa hiki pekee'}
+                  {member ? (member.email || 'Umeingia') : 'Unacheza kwenye kifaa hiki pekee'}
                 </p>
               </>
             )}
@@ -119,7 +123,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {user ? (
+        {member ? (
           <button onClick={() => signOut()}
             className="w-full mt-4 bg-white border-2 border-sand-200 text-umber-600 font-semibold py-2.5 rounded-full flex items-center justify-center gap-2">
             <LogOut className="w-4 h-4" /> Toka
