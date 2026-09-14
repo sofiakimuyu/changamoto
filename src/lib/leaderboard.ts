@@ -23,7 +23,7 @@
 // change without touching pages.
 
 import { MAX_ROWS, getDayIndex } from './wordle'
-import { supabase, hasBackend, identityId, identityIds, identityReady } from './supabase'
+import { supabase, hasBackend, identityId, identityReady } from './supabase'
 
 const NAME_KEY = 'changamoto_player_name'
 const FULL_NAME_KEY = 'changamoto_player_full_name'
@@ -264,6 +264,13 @@ function localStatRows(): StatRow[] {
   }))
 }
 
+/** Local results that haven't reached the shared board yet (still pending sync). */
+function pendingStatRows(): StatRow[] {
+  return Object.values(loadResults())
+    .filter(r => !r.published)
+    .map(r => ({ day: r.day, game: r.game, solved: r.solved, guesses: r.guesses, points: r.points }))
+}
+
 export function getPlayerStats(): PlayerStats {
   return summarise(localStatRows())
 }
@@ -278,11 +285,16 @@ export interface ProfileStats extends ProfileSummary {
 /**
  * The signed-in player's full history.
  *
- * Reads every score row filed under any id this player owns, so signing in on a
- * new device shows the whole season rather than an empty profile. Results saved
- * on this device that aren't on the shared board yet (offline, or a submit that
- * hasn't landed) are folded in, so the profile never under-reports what the
- * player just finished.
+ * Reads the season under this player's canonical id — their account id once
+ * signed in, otherwise this device's id — so the total reads the same on every
+ * device they sign in on. Games recorded under a device id before signing in
+ * belong to that device, not the account, and are deliberately left out rather
+ * than inflating the total on the one machine that happens to hold them.
+ *
+ * Results saved on this device that aren't on the shared board yet (offline, or
+ * a submit that hasn't landed) are folded in so the profile never under-reports
+ * what the player just finished; `syncPendingResults` then re-files them under
+ * the canonical id, so they converge to the same total everywhere.
  */
 export async function getProfileStats(): Promise<ProfileStats> {
   const local = localStatRows()
@@ -292,7 +304,7 @@ export async function getProfileStats(): Promise<ProfileStats> {
   const { data, error } = await supabase
     .from('scores')
     .select('day,game,solved,guesses,points')
-    .in('client_id', identityIds())
+    .eq('client_id', identityId())
   if (error) {
     console.warn('getProfileStats failed:', error.message)
     return { ...summarise(local), source: 'local', error: error.message }
@@ -300,7 +312,7 @@ export async function getProfileStats(): Promise<ProfileStats> {
 
   const shared = data as StatRow[]
   const seen = new Set(shared.map(r => resultKey(r.day, r.game)))
-  const rows = [...shared, ...local.filter(r => !seen.has(resultKey(r.day, r.game)))]
+  const rows = [...shared, ...pendingStatRows().filter(r => !seen.has(resultKey(r.day, r.game)))]
   return { ...summarise(rows), source: 'shared', error: null }
 }
 
@@ -555,7 +567,7 @@ export async function getDailyBoard(day: number): Promise<Board> {
   if (!hasBackend || !supabase) return { ...getSimulatedDaily(day), source: 'local', error: null }
 
   await identityReady
-  const mine = identityIds()
+  const mine = [identityId()]
   const { data, error } = await supabase
     .from('scores')
     .select('client_id,name,game,points,solved,guesses')
@@ -597,7 +609,7 @@ export async function getAllTimeBoard(): Promise<Board> {
   if (!hasBackend || !supabase) return { ...getSimulatedAllTime(), source: 'local', error: null }
 
   await identityReady
-  const mine = identityIds()
+  const mine = [identityId()]
   const { data, error } = await supabase
     .from('alltime_leaderboard')
     .select('client_id,name,points,played,wins')

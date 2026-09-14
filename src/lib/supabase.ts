@@ -120,13 +120,9 @@ let authUserId: string | null = getCachedMember()?.id ?? null
 export function setAuthUserId(id: string | null): void { authUserId = id }
 export function getAuthUserId(): string | null { return authUserId }
 
-/** Every id this player's rows may have been written under, best match first. */
-export function identityIds(): string[] {
-  const device = getClientId()
-  return authUserId && authUserId !== device ? [authUserId, device] : [device]
-}
-
-/** The id new rows are written under. */
+/** The id new rows are written under, and the single canonical id a player's own
+ *  totals are read back under so they match on every device they sign in on. A
+ *  signed-in player is their account id; an anonymous one is this device's id. */
 export function identityId(): string { return authUserId ?? getClientId() }
 
 /**
