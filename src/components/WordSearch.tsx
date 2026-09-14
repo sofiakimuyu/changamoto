@@ -114,7 +114,7 @@ export default function WordSearch() {
           {showWin && (
             <WinSheet emoji="🔤" title="Umeshinda!"
               subtitle={`Maneno ${wsWordList.length}/${wsWordList.length} · ${formatTime(finalSeconds)} · Pointi ${points}`}
-              shareText={`Changamoto · Tafuta Maneno · ${formatTime(finalSeconds)} · ${points} pointi`}
+              shareText={`Tatua Fumbo · Tafuta Maneno · ${formatTime(finalSeconds)} · ${points} pointi`}
               onClose={() => setShowWin(false)} />
           )}
         </div>

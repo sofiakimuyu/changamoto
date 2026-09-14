@@ -1,5 +1,5 @@
 // Auto-generated from the curated 4-letter Swahili word CSV.
-// These are the daily-answer pool for the 4-letter Changamoto Wordle.
+// These are the daily-answer pool for the 4-letter Tatua Fumbo Wordle.
 import { WordleEntry } from './wordle-words'
 
 export const ANSWERS_4: WordleEntry[] = [

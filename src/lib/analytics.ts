@@ -1,4 +1,4 @@
-// Anonymous usage analytics for Changamoto. Answers the two product questions:
+// Anonymous usage analytics for Tatua Fumbo. Answers the two product questions:
 // "how many people use it?" (unique devices / active users) and "how often?"
 // (sessions, plays, returning-day engagement).
 //

@@ -1,4 +1,4 @@
-# Changamoto — Swahili Wordle & word games
+# Tatua Fumbo — Swahili Wordle & word games
 
 A daily Swahili **Wordle** and a small arcade of Swahili word games, built with
 Vite + React + TypeScript + Tailwind. The gameplay engine is adapted from the

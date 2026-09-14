@@ -1,5 +1,5 @@
 // csv-to-answers.mjs — Convert the curated Swahili word CSVs into typed answer
-// pools for the Changamoto Wordle. Each CSV shares the same columns:
+// pools for the Tatua Fumbo Wordle. Each CSV shares the same columns:
 //   word, english, part_of_speech, example_sw, example_en, notes
 // Verb roots may be written with a leading '-' (e.g. "-kaa"); we strip it so the
 // playable word is the bare stem. Output goes to src/data/answers-<len>.ts.
@@ -58,7 +58,7 @@ async function convert(csvPath, len) {
 
   const body = entries.map(e => '  ' + JSON.stringify(e)).join(',\n')
   const ts = `// Auto-generated from the curated ${len}-letter Swahili word CSV.
-// These are the daily-answer pool for the ${len}-letter Changamoto Wordle.
+// These are the daily-answer pool for the ${len}-letter Tatua Fumbo Wordle.
 import { WordleEntry } from './wordle-words'
 
 export const ANSWERS_${len}: WordleEntry[] = [

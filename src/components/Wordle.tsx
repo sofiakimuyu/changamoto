@@ -211,13 +211,13 @@ export default function Wordle({ config }: Props) {
     const grid = guesses.map(g =>
       scoreGuess(g, answer.word).map(s => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')
     ).join('\n')
-    const header = `Changamoto · ${config.label} · ${status === 'won' ? guesses.length : 'X'}/${MAX_ROWS}`
+    const header = `Tatua Fumbo · ${config.label} · ${status === 'won' ? guesses.length : 'X'}/${MAX_ROWS}`
     const url = 'https://sofiakimuyu.github.io/changamoto/'
     const text = `${header}\n${grid}`
     // Prefer the native share sheet (mobile); fall back to clipboard on desktop.
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Changamoto', text: `${text}\n`, url })
+        await navigator.share({ title: 'Tatua Fumbo', text: `${text}\n`, url })
         return
       }
     } catch {

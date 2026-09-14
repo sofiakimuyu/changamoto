@@ -1,4 +1,4 @@
--- Changamoto shared leaderboard schema.
+-- Tatua Fumbo shared leaderboard schema.
 -- Run this in your Supabase project: SQL Editor → New query → paste → Run.
 -- Safe to re-run: it migrates an existing table in place.
 --

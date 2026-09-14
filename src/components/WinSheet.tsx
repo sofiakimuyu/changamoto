@@ -33,7 +33,7 @@ export default function WinSheet({ emoji, title, subtitle, shareText, onClose }:
   const share = async () => {
     const url = 'https://sofiakimuyu.github.io/changamoto/'
     try {
-      if (navigator.share) { await navigator.share({ title: 'Changamoto', text: `${shareText}\n`, url }); return }
+      if (navigator.share) { await navigator.share({ title: 'Tatua Fumbo', text: `${shareText}\n`, url }); return }
     } catch { /* cancelled — fall through to clipboard */ }
     try {
       await navigator.clipboard.writeText(`${shareText}\n${url}`)

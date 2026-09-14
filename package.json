@@ -1,7 +1,7 @@
 {
   "name": "changamoto",
   "version": "1.0.0",
-  "description": "Changamoto — Swahili Wordle and daily word games",
+  "description": "Tatua Fumbo — Swahili Wordle and daily word games",
   "private": true,
   "type": "module",
   "scripts": {

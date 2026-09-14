@@ -1,4 +1,4 @@
--- Changamoto usage-analytics schema.
+-- Tatua Fumbo usage-analytics schema.
 -- Run this in your Supabase project: SQL Editor → New query → paste → Run.
 -- (Independent of scores/schema.sql — you can run either or both.)
 --

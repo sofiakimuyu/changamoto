@@ -64,7 +64,7 @@ export default function PairMatch() {
           {showWin && (
             <WinSheet emoji="✦" title="Umeshinda!"
               subtitle={`Jozi ${puzzlePairs.length}/${puzzlePairs.length} · Makosa ${mistakes} · Pointi ${points}`}
-              shareText={`Changamoto · Oanisha Maneno · ${puzzlePairs.length}/${puzzlePairs.length} · ${points} pointi`}
+              shareText={`Tatua Fumbo · Oanisha Maneno · ${puzzlePairs.length}/${puzzlePairs.length} · ${points} pointi`}
               onClose={() => setShowWin(false)} />
           )}
         </div>

@@ -1,5 +1,5 @@
 // Auto-generated from the curated 3-letter Swahili word CSV.
-// These are the daily-answer pool for the 3-letter Changamoto Wordle.
+// These are the daily-answer pool for the 3-letter Tatua Fumbo Wordle.
 import { WordleEntry } from './wordle-words'
 
 export const ANSWERS_3: WordleEntry[] = [

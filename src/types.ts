@@ -1,4 +1,4 @@
-// Slim type definitions used by Changamoto. Mirrors the subset of the Hekima
+// Slim type definitions used by Tatua Fumbo. Mirrors the subset of the Hekima
 // data model that the ported vocabulary/challenge content relies on.
 
 export interface VocabWord {

@@ -30,7 +30,7 @@ export default function Nav() {
         <div className="beadwork-stripe opacity-70"/>
         <div className="max-w-3xl mx-auto flex items-center justify-between px-3 py-2 gap-1">
           <button onClick={() => navigate('/')} className="flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform">
-            <span className="font-black text-umber-700 text-base sm:text-lg tracking-tight whitespace-nowrap">Tatua Fumbo</span>
+            <span className="font-display text-umber-700 text-2xl sm:text-3xl tracking-wide whitespace-nowrap">Tatua Fumbo</span>
           </button>
           <nav className="flex items-center gap-0.5">
             {/* Hidden until the session is known, so the bar doesn't flash the
