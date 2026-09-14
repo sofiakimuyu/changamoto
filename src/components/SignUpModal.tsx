@@ -6,7 +6,7 @@ import { hasBackend } from '../lib/supabase'
 import { getPlayerName, setPlayerName, getFullName, setFullName } from '../lib/leaderboard'
 
 // Sign-up / account panel. Passwordless: the player gives their name, email and
-// a username, we email a six-digit code, and typing it back ties their progress
+// a username, we email a numeric code, and typing it back ties their progress
 // + leaderboard standing to that account across devices. Codes rather than links
 // because most players are on phones — see the note in lib/auth.ts.
 //
@@ -73,7 +73,7 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
   // branch, so there's nothing to set here beyond clearing the busy flag.
   const verify = async () => {
     setError(null)
-    if (!/^\d{6}$/.test(code.trim())) { setError('Weka namba ya tarakimu sita.'); return }
+    if (!/^\d{6,10}$/.test(code.trim())) { setError('Weka namba ya kuingia uliyotumiwa.'); return }
     setBusy(true)
     const { error } = await verifySignInCode(email, code, profile())
     setBusy(false)
@@ -121,11 +121,11 @@ export default function SignUpModal({ onClose }: { onClose: () => void }) {
             </div>
             <p className="text-umber-700 font-bold text-center mb-1">Angalia barua pepe yako</p>
             <p className="text-umber-400 text-sm text-center mb-4">
-              Tumetuma namba ya tarakimu sita kwa <strong>{email}</strong>.
+              Tumetuma namba ya kuingia kwa <strong>{email}</strong>.
             </p>
 
-            <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" autoFocus
+            <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              inputMode="numeric" autoComplete="one-time-code" maxLength={10} placeholder="000000" autoFocus
               onKeyDown={e => { if (e.key === 'Enter') verify() }}
               className="w-full px-3 py-3 rounded-xl border-2 border-sand-200 focus:border-ochre-400 outline-none
                          text-center text-2xl font-black tracking-[0.4em] text-umber-700" />

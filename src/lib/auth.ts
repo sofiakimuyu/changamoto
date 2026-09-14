@@ -1,4 +1,6 @@
-// Email-based accounts via Supabase Auth (passwordless six-digit code). Signing
+// Email-based accounts via Supabase Auth (passwordless numeric code — the code
+// length follows the Supabase project's OTP setting; the UI accepts 6–10 digits).
+// Signing
 // in gives a player a stable identity so their progress and leaderboard standing
 // follow them across devices. All of this is a no-op when the Supabase backend
 // isn't configured (see supabase.ts) — the UI checks `hasBackend` first.
@@ -28,7 +30,7 @@ export interface SignUpProfile {
 }
 
 /**
- * Email a six-digit sign-in code to `email`, creating the account if it's new.
+ * Email a numeric sign-in code to `email`, creating the account if it's new.
  *
  * Whether the player receives a code or a link is decided by the Supabase email
  * template, not by this call: the "Magic Link" template must interpolate
